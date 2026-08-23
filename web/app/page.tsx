@@ -16,6 +16,7 @@ export default function Home() {
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [hasFile, setHasFile] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -37,6 +38,8 @@ export default function Home() {
     try {
       const { profile } = await uploadResume(file);
       setProfile(profile);
+      if (fileInput.current) fileInput.current.value = "";
+      setHasFile(false);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "upload failed");
     } finally {
@@ -61,8 +64,16 @@ export default function Home() {
 
         <section className={styles.upload}>
           <h2>Resume</h2>
-          <input ref={fileInput} type="file" accept="application/pdf" />
-          <button onClick={handleUpload} disabled={uploading}>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => {
+              setHasFile(!!e.target.files?.length);
+              setUploadError(null);
+            }}
+          />
+          <button onClick={handleUpload} disabled={uploading || !hasFile}>
             {uploading ? "Parsing..." : "Upload resume"}
           </button>
           {uploadError && <p className={styles.error}>{uploadError}</p>}
