@@ -1,4 +1,4 @@
-const BRIDGE_URL = "http://127.0.0.1:7332";
+export const BRIDGE_URL = "http://127.0.0.1:7332";
 
 export type Project = {
   name: string;
