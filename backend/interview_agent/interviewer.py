@@ -139,6 +139,29 @@ class InterviewSession:
         self.history.append({"role": "assistant", "content": question})
         return question
 
+    async def summarize(self) -> str:
+        """A brief, ephemeral recap of the session so far - shown once, on
+        request, never stored. If nothing was said yet, there's nothing to
+        recap."""
+        if not self.history:
+            return "The interview hadn't started yet - nothing to recap."
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You just finished conducting the mock interview below. "
+                    "Write a brief (3-5 sentence) recap for the candidate: what "
+                    "topics/questions came up, and in general terms how they came "
+                    "across (strong on X, shaky on Y) - not a numeric score, just "
+                    "an honest, encouraging summary a real interviewer might give "
+                    "verbally at the end."
+                ),
+            },
+            *self.history,
+        ]
+        return await self._complete(messages)
+
     async def _complete(self, messages: list[dict[str, str]]) -> str:
         completion = await _client().chat.completions.create(
             model=settings.model,

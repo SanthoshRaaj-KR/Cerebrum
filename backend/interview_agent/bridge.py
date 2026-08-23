@@ -153,6 +153,27 @@ async def submit_answer(body: dict) -> dict:
     return {"question": question}
 
 
+@app.post("/api/session/end")
+async def end_session() -> dict:
+    """Ends the text-harness session and returns a brief recap. Ephemeral,
+    like everything else here - the summary is generated once, shown once,
+    and gone the moment the process restarts."""
+    global _session
+
+    if _session is None:
+        raise HTTPException(400, "no active interview session")
+
+    try:
+        summary = await _session.summarize()
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("could not summarize interview session")
+        raise HTTPException(502, f"could not summarize interview: {exc}") from exc
+    finally:
+        _session = None
+
+    return {"summary": summary}
+
+
 @app.post("/api/offer")
 async def offer(body: dict) -> dict:
     """WebRTC signaling endpoint: the browser posts an SDP offer (plus
