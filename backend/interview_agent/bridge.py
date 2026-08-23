@@ -8,14 +8,21 @@ nothing outside this machine can reach it - same posture as Friday AI.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pipecat.transports.smallwebrtc.request_handler import (
+    SmallWebRTCRequest,
+    SmallWebRTCRequestHandler,
+)
 
 from interview_agent import interviewer as interviewer_mod
+from interview_agent import pipeline as pipeline_mod
 from interview_agent import profile as profile_mod
 from interview_agent.config import settings
 
@@ -31,6 +38,13 @@ PORT = 7332
 _profile: profile_mod.CandidateProfile | None = None
 _session: interviewer_mod.InterviewSession | None = None
 
+# One handler for the process: tracks in-flight WebRTC peer connections by
+# pc_id so a renegotiation (ICE restart, reconnect) reuses the existing
+# connection instead of leaking a new one. MULTIPLE mode (the default) is
+# fine for a single-user local tool - it just means "don't reject a second
+# connection", not "actually serve two people at once".
+_webrtc_handler = SmallWebRTCRequestHandler()
+
 
 def system_info() -> dict[str, Any]:
     """The real configuration, for the console to display instead of guessing."""
@@ -42,7 +56,23 @@ def system_info() -> dict[str, Any]:
     }
 
 
-app = FastAPI(title="Interview Agent bridge")
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    # WorkerRunner needs a running event loop to construct, so it's built
+    # here rather than at import time (see pipeline.get_runner()).
+    # auto_end=False: this is a long-lived host that adds a worker per voice
+    # session, not a one-shot bot script that should exit when a session ends.
+    runner_task = asyncio.create_task(pipeline_mod.get_runner().run(auto_end=False))
+
+    yield
+
+    await pipeline_mod.get_runner().cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await runner_task
+    await _webrtc_handler.close()
+
+
+app = FastAPI(title="Interview Agent bridge", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     # The Next dev server runs on a different port; both are local.
@@ -121,6 +151,35 @@ async def submit_answer(body: dict) -> dict:
         raise HTTPException(502, f"could not get next question: {exc}") from exc
 
     return {"question": question}
+
+
+@app.post("/api/offer")
+async def offer(body: dict) -> dict:
+    """WebRTC signaling endpoint: the browser posts an SDP offer (plus
+    role/mode in request_data), this returns the SDP answer, and the actual
+    voice pipeline (pipeline.start_voice_session) is built in the background
+    the moment the connection is created - see _on_webrtc_connection below."""
+    request = SmallWebRTCRequest.from_dict(body)
+
+    role = mode = ""
+    if isinstance(request.request_data, dict):
+        role = str(request.request_data.get("role", ""))
+        mode = str(request.request_data.get("mode", ""))
+    if role not in settings.roles or mode not in settings.modes:
+        raise HTTPException(400, f"unknown role/mode: {role!r}/{mode!r}")
+
+    async def _on_webrtc_connection(connection) -> None:
+        await pipeline_mod.start_voice_session(connection, role, mode, _profile)
+
+    try:
+        answer = await _webrtc_handler.handle_web_request(request, _on_webrtc_connection)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("could not establish voice session")
+        raise HTTPException(502, f"could not establish voice session: {exc}") from exc
+
+    if answer is None:
+        raise HTTPException(502, "no SDP answer produced")
+    return answer
 
 
 def main() -> None:
