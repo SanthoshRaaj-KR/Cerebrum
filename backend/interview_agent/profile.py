@@ -114,8 +114,19 @@ def extract_text(pdf_bytes: bytes) -> str:
     return text
 
 
+# A fresh AsyncOpenAI() opens its own httpx connection pool that nothing
+# ever closes; over many resume uploads that's a slow socket leak. One
+# shared client, built on first use, avoids it.
+_client_instance: AsyncOpenAI | None = None
+
+
 def _client() -> AsyncOpenAI:
-    return AsyncOpenAI(api_key=settings.cerebras_api_key, base_url=CEREBRAS_BASE_URL)
+    global _client_instance
+    if _client_instance is None:
+        _client_instance = AsyncOpenAI(
+            api_key=settings.cerebras_api_key, base_url=CEREBRAS_BASE_URL
+        )
+    return _client_instance
 
 
 async def structure(raw_text: str) -> CandidateProfile:

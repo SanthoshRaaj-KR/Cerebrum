@@ -74,8 +74,20 @@ class UnknownRoleOrMode(ValueError):
     """role or mode isn't one prompts.py knows how to build a prompt for."""
 
 
+# A fresh AsyncOpenAI() opens its own httpx connection pool that nothing
+# ever closes; an interview runs many turns through this, so a new client
+# per turn would leak a socket per question. One shared client, built on
+# first use, avoids it.
+_client_instance: AsyncOpenAI | None = None
+
+
 def _client() -> AsyncOpenAI:
-    return AsyncOpenAI(api_key=settings.cerebras_api_key, base_url=CEREBRAS_BASE_URL)
+    global _client_instance
+    if _client_instance is None:
+        _client_instance = AsyncOpenAI(
+            api_key=settings.cerebras_api_key, base_url=CEREBRAS_BASE_URL
+        )
+    return _client_instance
 
 
 def _history_kept() -> int:
