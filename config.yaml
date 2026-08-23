@@ -1,0 +1,36 @@
+# Interview Agent runtime config. Everything tunable by ear lives here, not
+# in code. Secrets (API keys) live in .env instead - see .env.example.
+
+candidate:
+  # Calibrates every prompt: question difficulty, depth of follow-ups, and
+  # what's assumed as "obviously known" vs worth explaining. Entry-level
+  # candidates get simpler system-design scope and more forgiving fundamentals
+  # questions than a senior calibration would.
+  fresher: true
+
+interviewer:
+  model: llama-3.3-70b
+  # How many prior turns (question+answer pairs, not messages) stay in the
+  # LLM context. Too small and cross-questioning loses the thread; too large
+  # and the model spends its window rereading a whole interview each turn.
+  remember_turns: 20
+  # Roles selectable in the UI. Each must have a matching prompt template in
+  # backend/interview_agent/prompts/.
+  roles:
+    - ai_engineer
+    - backend_engineer
+    - full_stack_developer
+  # Modes selectable in the UI. Each must have a matching prompt template in
+  # backend/interview_agent/prompts/.
+  modes:
+    - resume_projects
+    - computer_fundamentals
+    - system_design
+
+voice:
+  stt:
+    provider: deepgram
+  tts:
+    provider: cartesia
+    # Cartesia voice id. Left blank picks Cartesia's default voice.
+    voice_id: ""
