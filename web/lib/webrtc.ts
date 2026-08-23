@@ -7,9 +7,22 @@ export type VoiceStatus =
   | "failed"
   | "ended";
 
+export type TranscriptSpeaker = "interviewer" | "you";
+
 export type VoiceSessionHandlers = {
   onStatusChange: (status: VoiceStatus) => void;
   onError: (message: string) => void;
+  onTranscript: (speaker: TranscriptSpeaker, text: string) => void;
+};
+
+// Pipecat's RTVI message shapes (pipecat.processors.frameworks.rtvi.models),
+// sent as JSON over the data channel we open below. Only the two transcript
+// message types are handled here - RTVI carries a lot more (speaking
+// state, metrics, function calls) that this UI has no use for yet.
+type RtviMessage = {
+  label: string;
+  type: string;
+  data?: { text?: string; final?: boolean };
 };
 
 /**
@@ -22,6 +35,7 @@ export type VoiceSessionHandlers = {
 export class VoiceSession {
   private pc: RTCPeerConnection | null = null;
   private micStream: MediaStream | null = null;
+  private dataChannel: RTCDataChannel | null = null;
   private readonly audioEl: HTMLAudioElement;
   private readonly handlers: VoiceSessionHandlers;
 
@@ -53,6 +67,13 @@ export class VoiceSession {
     pc.ontrack = (event) => {
       this.audioEl.srcObject = event.streams[0];
     };
+
+    // Pipecat's SmallWebRTCConnection only ever listens for a data channel
+    // WE open (aiortc's "datachannel" event fires for a channel created by
+    // the remote peer) - it never creates one itself. Must exist before
+    // createOffer() so the SDP even has an application m-line.
+    this.dataChannel = pc.createDataChannel("rtvi");
+    this.dataChannel.onmessage = (event) => this.handleDataChannelMessage(event.data);
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "connected") {
@@ -93,11 +114,30 @@ export class VoiceSession {
   }
 
   stop(): void {
+    this.dataChannel?.close();
+    this.dataChannel = null;
     this.pc?.close();
     this.pc = null;
     this.micStream?.getTracks().forEach((track) => track.stop());
     this.micStream = null;
     this.handlers.onStatusChange("ended");
+  }
+
+  private handleDataChannelMessage(raw: string): void {
+    if (raw.startsWith("ping")) return; // pipecat's own keepalive, not JSON
+    let msg: RtviMessage;
+    try {
+      msg = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (msg.label !== "rtvi-ai" || !msg.data?.text) return;
+
+    if (msg.type === "bot-transcription") {
+      this.handlers.onTranscript("interviewer", msg.data.text);
+    } else if (msg.type === "user-transcription" && msg.data.final) {
+      this.handlers.onTranscript("you", msg.data.text);
+    }
   }
 }
 
