@@ -53,7 +53,9 @@ export default function Home() {
       <main className={styles.main}>
         <h1>Interview Agent</h1>
         <p>
-          <Link href="/interview">Go to interview (text harness)</Link>
+          <Link href="/voice">Start a voice interview</Link>
+          {" · "}
+          <Link href="/interview">text harness</Link>
         </p>
 
         {bridgeError && <p className={styles.error}>{bridgeError}</p>}

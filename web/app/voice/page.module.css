@@ -1,0 +1,71 @@
+.page {
+  --background: #fafafa;
+  --foreground: #171717;
+
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--font-geist-sans);
+  background-color: var(--background);
+  color: var(--foreground);
+  padding: 2rem 1rem;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 640px;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+.note {
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.setup label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.status {
+  color: #444;
+}
+
+.transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.interviewer {
+  background: #eef2ff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+.you {
+  background: #f0fdf4;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  align-self: flex-end;
+}
