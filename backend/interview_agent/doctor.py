@@ -39,22 +39,51 @@ def check_cerebras() -> None:
         _fail("Cerebras unreachable")
         return
 
-    if r.status_code == 200:
-        wanted = settings.model
-        available = {m["id"] for m in r.json().get("data", [])}
-        print(f"{OK} key valid")
-        if wanted in available:
-            print(f"{OK} model {wanted} available")
-        else:
-            print(f"{WARN} model {wanted} not in your account's model list")
-    elif r.status_code == 401:
+    if r.status_code == 401:
         print(f"{BAD} key rejected. Make a new one at cloud.cerebras.ai")
         _fail("CEREBRAS_API_KEY invalid")
-    elif r.status_code == 429:
-        print(f"{BAD} rate limited or out of credit - check your usage")
-        _fail("Cerebras quota")
+        return
+    if r.status_code != 200:
+        print(f"{WARN} unexpected response listing models {r.status_code}: {r.text[:120]}")
+        return
+
+    wanted = settings.model
+    available = {m["id"] for m in r.json().get("data", [])}
+    print(f"{OK} key valid")
+    if wanted in available:
+        print(f"{OK} model {wanted} available")
     else:
-        print(f"{WARN} unexpected response {r.status_code}: {r.text[:120]}")
+        print(f"{WARN} model {wanted} not in your account's model list")
+
+    # Listing models doesn't touch billing; actually running an interview
+    # does. A key can be valid and still be out of quota - that only shows
+    # up on a real completion call, so make the smallest one that exists.
+    try:
+        r = httpx.post(
+            "https://api.cerebras.ai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {settings.cerebras_api_key}"},
+            json={
+                "model": wanted,
+                "messages": [{"role": "user", "content": "hi"}],
+                "max_tokens": 1,
+            },
+            timeout=30.0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"{BAD} could not run a completion: {exc}")
+        _fail("Cerebras completion unreachable")
+        return
+
+    if r.status_code == 200:
+        print(f"{OK} can run a completion")
+    elif r.status_code == 402:
+        print(f"{BAD} out of credit - top up at cloud.cerebras.ai (billing)")
+        _fail("Cerebras out of credit")
+    elif r.status_code == 429:
+        print(f"{BAD} rate limited - check your usage")
+        _fail("Cerebras rate limited")
+    else:
+        print(f"{WARN} unexpected response running a completion {r.status_code}: {r.text[:120]}")
 
 
 def check_deepgram() -> None:
