@@ -9,11 +9,12 @@ silent interviewer mid-session.
 
 from __future__ import annotations
 
+import shutil
 import sys
 
 import httpx
 
-from interview_agent.config import settings
+from interview_agent.config import ROOT, settings
 
 OK = "  [ ok ]"
 BAD = "  [FAIL]"
@@ -183,6 +184,27 @@ def _default_voice_id() -> str:
     return configured or "a0e99841-438c-4a64-b679-ae501e7d6091"
 
 
+def check_web() -> None:
+    print("\nWeb console (web/)")
+    if shutil.which("node") is None or shutil.which("npm") is None:
+        print(f"{BAD} node/npm not found on PATH")
+        _fail("node/npm missing")
+        return
+    print(f"{OK} node and npm on PATH")
+
+    web_dir = ROOT / "web"
+    if not (web_dir / "package.json").exists():
+        print(f"{BAD} web/package.json missing - is this a full checkout?")
+        _fail("web/package.json missing")
+        return
+
+    if not (web_dir / "node_modules").exists():
+        print(f"{WARN} web/node_modules missing - start.ps1 installs it on first run")
+        return
+
+    print(f"{OK} web dependencies installed")
+
+
 def check_roles_and_modes() -> None:
     print("\nInterview surface (config.yaml)")
     if not settings.roles:
@@ -220,6 +242,7 @@ def main(argv: list[str] | None = None) -> int:
         check_cerebras,
         check_deepgram,
         check_cartesia,
+        check_web,
         check_roles_and_modes,
     ):
         _run(check)
