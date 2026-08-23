@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import styles from "./page.module.css";
-import { SystemInfo, getHealth } from "@/lib/api";
+import Link from "next/link";
+import { CandidateProfile, SystemInfo, getHealth, getResume } from "@/lib/api";
 import { TranscriptSpeaker, VoiceSession, VoiceStatus } from "@/lib/webrtc";
 
 type Turn = { speaker: TranscriptSpeaker; text: string };
 
 export default function VoiceInterview() {
   const [system, setSystem] = useState<SystemInfo | null>(null);
+  const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [role, setRole] = useState("");
   const [mode, setMode] = useState("");
   const [status, setStatus] = useState<VoiceStatus>("idle");
@@ -28,6 +30,11 @@ export default function VoiceInterview() {
         setMode(data.system.modes[0] ?? "");
       })
       .catch(() => setError("Bridge not reachable. Is the backend running?"));
+    getResume()
+      .then((data) => setProfile(data.profile))
+      .catch(() => {
+        /* no profile yet - fine, resume_projects mode has its own fallback */
+      });
 
     // Stop any live mic/connection if the user navigates away mid-interview.
     return () => sessionRef.current?.stop();
@@ -70,6 +77,12 @@ export default function VoiceInterview() {
 
         {!live && (
           <section className={styles.setup}>
+            <p className={styles.note}>
+              {profile
+                ? `Resume: ${profile.name || "uploaded"} (used in resume_projects mode)`
+                : "No resume uploaded - resume_projects mode will ask you to introduce yourself instead. "}
+              {!profile && <Link href="/">Upload one</Link>}
+            </p>
             <label>
               Role
               <select value={role} onChange={(e) => setRole(e.target.value)}>
