@@ -70,12 +70,12 @@ async def upload_resume(file: UploadFile) -> dict:
         logger.exception("resume structuring failed")
         raise HTTPException(502, f"could not process resume: {exc}") from exc
 
-    return {"profile": _profile.to_dict()}
+    return {"profile": _profile.for_api()}
 
 
 @app.get("/api/resume")
 async def get_resume() -> dict:
-    return {"profile": _profile.to_dict() if _profile else None}
+    return {"profile": _profile.for_api() if _profile else None}
 
 
 def main() -> None:

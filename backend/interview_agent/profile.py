@@ -81,6 +81,18 @@ class CandidateProfile:
     def to_dict(self) -> dict:
         return asdict(self)
 
+    def for_api(self) -> dict:
+        """The shape sent back to the frontend - everything but raw_text.
+
+        raw_text exists for the interviewer (Phase 3) to ground follow-up
+        questions in the actual document; the UI only ever renders the
+        structured fields, so there's no reason to ship a whole resume's
+        worth of text back down the wire for it to ignore.
+        """
+        data = self.to_dict()
+        del data["raw_text"]
+        return data
+
 
 def extract_text(pdf_bytes: bytes) -> str:
     if len(pdf_bytes) > MAX_PDF_BYTES:
