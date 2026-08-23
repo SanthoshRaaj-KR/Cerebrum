@@ -123,6 +123,17 @@ export class VoiceSession {
     this.handlers.onStatusChange("ended");
   }
 
+  /** Toggles the mic track's enabled state (not the connection) and
+   * returns whether it's now muted. Muting this way keeps the WebRTC
+   * connection and audio track alive - it just stops sending real audio -
+   * which is far cheaper than tearing down and renegotiating the session. */
+  toggleMute(): boolean {
+    const track = this.micStream?.getAudioTracks()[0];
+    if (!track) return false;
+    track.enabled = !track.enabled;
+    return !track.enabled;
+  }
+
   private handleDataChannelMessage(raw: string): void {
     if (raw.startsWith("ping")) return; // pipecat's own keepalive, not JSON
     let msg: RtviMessage;

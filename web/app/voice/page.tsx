@@ -14,9 +14,11 @@ export default function VoiceInterview() {
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [muted, setMuted] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const sessionRef = useRef<VoiceSession | null>(null);
+  const live = status === "connecting" || status === "connected";
 
   useEffect(() => {
     getHealth()
@@ -32,9 +34,13 @@ export default function VoiceInterview() {
   }, []);
 
   function handleStart() {
-    if (!audioRef.current) return;
+    // status (not sessionRef) is the double-click guard: it correctly
+    // resets on failure/end so a retry isn't permanently blocked, unlike
+    // checking whether sessionRef still holds a (by then stopped) session.
+    if (!audioRef.current || live) return;
     setError(null);
     setTurns([]);
+    setMuted(false);
 
     const session = new VoiceSession(audioRef.current, {
       onStatusChange: setStatus,
@@ -50,7 +56,10 @@ export default function VoiceInterview() {
     sessionRef.current = null;
   }
 
-  const live = status === "connecting" || status === "connected";
+  function handleToggleMute() {
+    if (!sessionRef.current) return;
+    setMuted(sessionRef.current.toggleMute());
+  }
 
   return (
     <div className={styles.page}>
@@ -91,8 +100,18 @@ export default function VoiceInterview() {
           <section className={styles.session}>
             <p className={styles.status}>
               Status: <strong>{status}</strong>
+              {status === "connected" && (
+                <span className={muted ? styles.muted : styles.liveDot}>
+                  {muted ? " muted" : " mic live"}
+                </span>
+              )}
             </p>
-            <button onClick={handleEnd}>End interview</button>
+            <div className={styles.controls}>
+              <button onClick={handleToggleMute} disabled={status !== "connected"}>
+                {muted ? "Unmute" : "Mute"}
+              </button>
+              <button onClick={handleEnd}>End interview</button>
+            </div>
 
             <div className={styles.transcript}>
               {turns.map((t, i) => (

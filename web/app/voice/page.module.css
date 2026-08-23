@@ -51,6 +51,21 @@
   color: #444;
 }
 
+.liveDot {
+  color: #16a34a;
+  font-size: 0.85rem;
+}
+
+.muted {
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .transcript {
   display: flex;
   flex-direction: column;
