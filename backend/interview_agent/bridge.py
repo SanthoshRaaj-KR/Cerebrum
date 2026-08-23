@@ -15,6 +15,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from interview_agent import interviewer as interviewer_mod
 from interview_agent import profile as profile_mod
 from interview_agent.config import settings
 
@@ -23,10 +24,12 @@ logger = logging.getLogger("interview_agent.bridge")
 HOST = "127.0.0.1"
 PORT = 7332
 
-# Holds the most recently uploaded candidate profile for this process.
-# No database: sessions are ephemeral, so this resets on every restart -
-# same posture as Friday AI's in-memory Supervisor history.
+# Holds the most recently uploaded candidate profile, and the active
+# interview session, for this process. No database: both are ephemeral,
+# reset on every restart - same posture as Friday AI's in-memory Supervisor
+# history. One session at a time: this is a single-user local tool.
 _profile: profile_mod.CandidateProfile | None = None
+_session: interviewer_mod.InterviewSession | None = None
 
 
 def system_info() -> dict[str, Any]:
@@ -76,6 +79,48 @@ async def upload_resume(file: UploadFile) -> dict:
 @app.get("/api/resume")
 async def get_resume() -> dict:
     return {"profile": _profile.for_api() if _profile else None}
+
+
+@app.post("/api/session/start")
+async def start_session(body: dict) -> dict:
+    """Starts (or restarts) the one active interview session with a fresh
+    system prompt and empty history. Text-only for now - Phase 4 swaps this
+    endpoint's role for a live voice pipeline without touching interviewer.py."""
+    global _session
+
+    role = str(body.get("role", ""))
+    mode = str(body.get("mode", ""))
+    try:
+        _session = interviewer_mod.InterviewSession(role=role, mode=mode, profile=_profile)
+    except interviewer_mod.UnknownRoleOrMode as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    try:
+        question = await _session.start()
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("could not start interview session")
+        _session = None
+        raise HTTPException(502, f"could not start interview: {exc}") from exc
+
+    return {"question": question}
+
+
+@app.post("/api/session/answer")
+async def submit_answer(body: dict) -> dict:
+    if _session is None:
+        raise HTTPException(400, "no active interview session - call /api/session/start first")
+
+    text = str(body.get("text", "")).strip()
+    if not text:
+        raise HTTPException(400, "empty answer")
+
+    try:
+        question = await _session.answer(text)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("interview session failed to produce a next question")
+        raise HTTPException(502, f"could not get next question: {exc}") from exc
+
+    return {"question": question}
 
 
 def main() -> None:
