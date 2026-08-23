@@ -124,13 +124,63 @@ def check_cartesia() -> None:
         _fail("Cartesia unreachable")
         return
 
-    if r.status_code == 200:
-        print(f"{OK} key valid")
-    elif r.status_code in (401, 403):
+    if r.status_code == 401 or r.status_code == 403:
         print(f"{BAD} key rejected. Check CARTESIA_API_KEY")
         _fail("CARTESIA_API_KEY invalid")
+        return
+    if r.status_code != 200:
+        print(f"{WARN} unexpected response listing voices {r.status_code}: {r.text[:120]}")
+        return
+    print(f"{OK} key valid")
+
+    # Listing voices doesn't touch billing; actually synthesizing does (same
+    # gap the Cerebras check above closed) - a key can list voices fine and
+    # still be out of credit for real TTS. Voice id left unset here uses
+    # Cartesia's account default, same as the pipeline does when
+    # voice.tts.voice_id in config.yaml is blank.
+    try:
+        r = httpx.post(
+            "https://api.cartesia.ai/tts/bytes",
+            headers={
+                "Authorization": f"Bearer {settings.cartesia_api_key}",
+                "Cartesia-Version": "2024-06-10",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model_id": "sonic-2",
+                "transcript": "hi",
+                "voice": {"mode": "id", "id": _default_voice_id()},
+                "output_format": {
+                    "container": "raw",
+                    "encoding": "pcm_s16le",
+                    "sample_rate": 16000,
+                },
+            },
+            timeout=30.0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"{BAD} could not synthesize speech: {exc}")
+        _fail("Cartesia synthesis unreachable")
+        return
+
+    if r.status_code == 200:
+        print(f"{OK} can synthesize speech")
+    elif r.status_code == 402:
+        print(f"{BAD} out of credit - top up at play.cartesia.ai (billing)")
+        _fail("Cartesia out of credit")
+    elif r.status_code in (401, 403):
+        print(f"{BAD} key rejected during synthesis. Check CARTESIA_API_KEY")
+        _fail("CARTESIA_API_KEY invalid")
     else:
-        print(f"{WARN} unexpected response {r.status_code}: {r.text[:120]}")
+        print(f"{WARN} unexpected response synthesizing speech {r.status_code}: {r.text[:150]}")
+
+
+def _default_voice_id() -> str:
+    configured = ((settings.voice.get("tts") or {}).get("voice_id") or "").strip()
+    # Cartesia's well-known default demo voice, used only for this preflight
+    # ping when config.yaml leaves voice_id blank (pipeline.py itself passes
+    # voice_id=None in that case, which picks the account default instead).
+    return configured or "a0e99841-438c-4a64-b679-ae501e7d6091"
 
 
 def check_roles_and_modes() -> None:
