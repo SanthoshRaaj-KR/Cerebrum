@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import styles from "./page.module.css";
 import {
@@ -51,6 +52,9 @@ export default function Home() {
     <div className={styles.page}>
       <main className={styles.main}>
         <h1>Interview Agent</h1>
+        <p>
+          <Link href="/interview">Go to interview (text harness)</Link>
+        </p>
 
         {bridgeError && <p className={styles.error}>{bridgeError}</p>}
         {system && (

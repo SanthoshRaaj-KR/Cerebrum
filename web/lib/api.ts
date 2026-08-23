@@ -50,3 +50,24 @@ export async function uploadResume(
   });
   return asJson(res);
 }
+
+export async function startSession(
+  role: string,
+  mode: string
+): Promise<{ question: string }> {
+  const res = await fetch(`${BRIDGE_URL}/api/session/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role, mode }),
+  });
+  return asJson(res);
+}
+
+export async function submitAnswer(text: string): Promise<{ question: string }> {
+  const res = await fetch(`${BRIDGE_URL}/api/session/answer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  return asJson(res);
+}
