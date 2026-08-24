@@ -109,7 +109,45 @@ def check_deepgram() -> None:
         print(f"{WARN} unexpected response {r.status_code}: {r.text[:120]}")
 
 
-def check_cartesia() -> None:
+def check_tts() -> None:
+    """Checks whichever TTS provider config.yaml actually selects."""
+    if settings.tts_provider == "cartesia":
+        _check_cartesia()
+    else:
+        _check_deepgram_tts()
+
+
+def _check_deepgram_tts() -> None:
+    print("\nDeepgram TTS (the interviewer's voice)")
+    voice = settings.tts_voice_id or "aura-2-thalia-en"
+    try:
+        r = httpx.post(
+            f"https://api.deepgram.com/v1/speak?model={voice}",
+            headers={
+                "Authorization": f"Token {settings.deepgram_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={"text": "test"},
+            timeout=30.0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"{BAD} could not reach Deepgram TTS: {exc}")
+        _fail("Deepgram TTS unreachable")
+        return
+
+    if r.status_code == 200:
+        print(f"{OK} can synthesize speech (voice {voice})")
+    elif r.status_code in (401, 403):
+        print(f"{BAD} key rejected for TTS. Check DEEPGRAM_API_KEY")
+        _fail("DEEPGRAM_API_KEY invalid for TTS")
+    elif r.status_code == 402:
+        print(f"{BAD} out of credit - check billing at console.deepgram.com")
+        _fail("Deepgram out of credit")
+    else:
+        print(f"{WARN} unexpected response synthesizing speech {r.status_code}: {r.text[:150]}")
+
+
+def _check_cartesia() -> None:
     print("\nCartesia (the interviewer's voice)")
     try:
         r = httpx.get(
@@ -241,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
     for check in (
         check_cerebras,
         check_deepgram,
-        check_cartesia,
+        check_tts,
         check_web,
         check_roles_and_modes,
     ):

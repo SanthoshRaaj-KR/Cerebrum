@@ -13,7 +13,7 @@ off a list.
       │
       ├── Deepgram            speech-to-text
       ├── Cerebras            the interviewer's model - asks, follows up, cross-questions
-      └── Cartesia            text-to-speech
+      └── Deepgram            text-to-speech (or Cartesia, if you switch it)
       │
       ▼
   resume/projects            uploaded once, structured, grounds resume_projects mode
@@ -31,8 +31,13 @@ calibrated for a fresher candidate by default (`candidate.fresher` in
 | Piece | What | Cost |
 |---|---|---|
 | The interviewer | Cerebras | Pay-as-you-go - [cloud.cerebras.ai](https://cloud.cerebras.ai) billing |
-| Speech-to-text | Deepgram | Free tier available - [console.deepgram.com](https://console.deepgram.com) |
-| Text-to-speech | Cartesia | Free tier available - [play.cartesia.ai](https://play.cartesia.ai) |
+| Speech-to-text **and** text-to-speech | Deepgram | Free tier available - [console.deepgram.com](https://console.deepgram.com) |
+| Text-to-speech (optional alternative) | Cartesia | Only if you switch `voice.tts.provider` - [play.cartesia.ai](https://play.cartesia.ai) |
+
+**Two keys, not three.** Deepgram does both STT and TTS off one key, so the
+voice pipeline needs no third account. Cartesia stays wired up as an option
+if you prefer its voices - set `voice.tts.provider: cartesia` in
+`config.yaml` and add `CARTESIA_API_KEY` to `.env`.
 
 ## Setup
 
@@ -69,7 +74,7 @@ is the default execution policy; `./start.sh` already passes
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
-Three keys go in `.env` - see `.env.example`:
+Two keys go in `.env` - see `.env.example`:
 
 - **Cerebras** - [cloud.cerebras.ai](https://cloud.cerebras.ai) → create an
   API key, and make sure the account has credit. `doctor.py` checks this
@@ -77,10 +82,11 @@ Three keys go in `.env` - see `.env.example`:
   listing models succeeds on an unfunded account, but running an interview
   doesn't.
 - **Deepgram** - [console.deepgram.com](https://console.deepgram.com) →
-  create an API key.
-- **Cartesia** - [play.cartesia.ai](https://play.cartesia.ai) → create an
-  API key. Same out-of-credit check as Cerebras, via a minimal synthesis
-  call.
+  create an API key. Used for both hearing your answers and speaking the
+  questions.
+
+`CARTESIA_API_KEY` is optional and only read when `voice.tts.provider` is
+set to `cartesia`; leaving it blank is fine.
 
 Check all three before relying on them:
 
@@ -133,8 +139,13 @@ memory and reset the moment it stops.
 ## Status
 
 Every phase up through the voice pipeline and web UI is built and, where a
-real Cerebras/Deepgram key made it possible, verified live - not just
-structurally. What's *not* yet verified end to end: a full spoken interview
-with a funded Cerebras account and a real Cartesia key, through an actual
-browser microphone. The commit history has the specifics of what was and
-wasn't testable at each step.
+real key made it possible, verified live - not just structurally. Both
+Deepgram websockets (STT and TTS) have been confirmed connecting inside the
+running pipeline.
+
+The one remaining blocker is **Cerebras account credit**: the key
+authenticates and the model is available, but completions return `402
+Payment required`, so a full spoken interview hasn't been run end to end
+yet. Top up at [cloud.cerebras.ai](https://cloud.cerebras.ai) and
+`.\start.ps1 -Check` will go green. The commit history has the specifics of
+what was and wasn't testable at each step.

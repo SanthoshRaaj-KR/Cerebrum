@@ -15,14 +15,18 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 load_dotenv(ROOT / ".env")
 
-_REQUIRED = ["CEREBRAS_API_KEY", "DEEPGRAM_API_KEY", "CARTESIA_API_KEY"]
+# Cartesia is deliberately not here: the default TTS provider is Deepgram,
+# which uses the same key as STT. CARTESIA_API_KEY is only needed if
+# config.yaml's voice.tts.provider is switched to cartesia, and that case is
+# checked at load time below rather than demanded from everyone.
+_REQUIRED = ["CEREBRAS_API_KEY", "DEEPGRAM_API_KEY"]
 
 
 @dataclass
 class Settings:
     cerebras_api_key: str
     deepgram_api_key: str
-    cartesia_api_key: str
+    cartesia_api_key: str = ""
     raw: dict[str, Any] = field(default_factory=dict)
 
     # -- config.yaml sections -------------------------------------------------
@@ -62,6 +66,14 @@ class Settings:
     def modes(self) -> list[str]:
         return list(self.interviewer.get("modes", []))
 
+    @property
+    def tts_provider(self) -> str:
+        return str((self.voice.get("tts") or {}).get("provider", "deepgram")).lower()
+
+    @property
+    def tts_voice_id(self) -> str:
+        return str((self.voice.get("tts") or {}).get("voice_id", "")).strip()
+
 
 def load_settings() -> Settings:
     missing = [k for k in _REQUIRED if not os.environ.get(k)]
@@ -77,12 +89,24 @@ def load_settings() -> Settings:
     config_path = ROOT / "config.yaml"
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
 
-    return Settings(
+    settings = Settings(
         cerebras_api_key=os.environ["CEREBRAS_API_KEY"],
         deepgram_api_key=os.environ["DEEPGRAM_API_KEY"],
-        cartesia_api_key=os.environ["CARTESIA_API_KEY"],
+        cartesia_api_key=os.environ.get("CARTESIA_API_KEY", "").strip(),
         raw=raw,
     )
+
+    if settings.tts_provider == "cartesia" and not settings.cartesia_api_key:
+        print(
+            "\nInterview Agent cannot start - config.yaml sets"
+            " voice.tts.provider to cartesia, but CARTESIA_API_KEY is not in"
+            " .env.\nEither add the key, or set the provider back to deepgram"
+            " (which needs no extra key).\n",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    return settings
 
 
 settings = load_settings()

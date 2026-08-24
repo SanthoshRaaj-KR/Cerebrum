@@ -24,6 +24,7 @@ from pipecat.processors.audio.vad_processor import VADProcessor
 from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.services.cerebras.llm import CerebrasLLMService
 from pipecat.services.deepgram.stt import DeepgramSTTService
+from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
@@ -79,6 +80,25 @@ def system_prompt(role: str, mode: str, profile: CandidateProfile | None) -> str
     )
 
 
+def _build_tts():
+    """The configured TTS service. Deepgram by default - it does STT and TTS
+    off one key, so the voice pipeline needs no third account."""
+    voice_id = settings.tts_voice_id
+
+    if settings.tts_provider == "cartesia":
+        return CartesiaTTSService(
+            api_key=settings.cartesia_api_key,
+            voice_id=voice_id or None,
+        )
+
+    # config.py already rejects an unknown provider paired with a missing
+    # key; anything else falls through to the default.
+    return DeepgramTTSService(
+        api_key=settings.deepgram_api_key,
+        settings=DeepgramTTSService.Settings(voice=voice_id or "aura-2-thalia-en"),
+    )
+
+
 async def start_voice_session(
     connection: SmallWebRTCConnection,
     role: str,
@@ -96,10 +116,7 @@ async def start_voice_session(
     await stop_current_session()
 
     stt = DeepgramSTTService(api_key=settings.deepgram_api_key)
-    tts = CartesiaTTSService(
-        api_key=settings.cartesia_api_key,
-        voice_id=(settings.voice.get("tts", {}) or {}).get("voice_id") or None,
-    )
+    tts = _build_tts()
     llm = CerebrasLLMService(
         api_key=settings.cerebras_api_key,
         settings=CerebrasLLMService.Settings(model=settings.model),

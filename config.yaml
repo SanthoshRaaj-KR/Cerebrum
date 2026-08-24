@@ -34,6 +34,11 @@ voice:
   stt:
     provider: deepgram
   tts:
-    provider: cartesia
-    # Cartesia voice id. Left blank picks Cartesia's default voice.
+    # deepgram or cartesia. Deepgram is the default because it does both
+    # speech-to-text and text-to-speech off the same key - one less account
+    # to hold. Switch to cartesia if you prefer its voices; that needs
+    # CARTESIA_API_KEY in .env, which is otherwise not required at all.
+    provider: deepgram
+    # Voice id. Blank picks the provider's default - aura-2-thalia-en for
+    # Deepgram, the account default for Cartesia.
     voice_id: ""
