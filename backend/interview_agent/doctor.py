@@ -27,22 +27,52 @@ def _fail(msg: str) -> None:
     _failures.append(msg)
 
 
-def check_cerebras() -> None:
-    print("\nCerebras (the interviewer's model)")
+# Both providers speak the OpenAI API shape (Cerebras is OpenAI-compatible),
+# so one check covers whichever config.yaml selects.
+_LLM_PROVIDERS = {
+    "openai": {
+        "label": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "key_name": "OPENAI_API_KEY",
+        "console": "platform.openai.com/api-keys",
+        "billing": "platform.openai.com/account/billing",
+    },
+    "cerebras": {
+        "label": "Cerebras",
+        "base_url": "https://api.cerebras.ai/v1",
+        "key_name": "CEREBRAS_API_KEY",
+        "console": "cloud.cerebras.ai",
+        "billing": "cloud.cerebras.ai (billing)",
+    },
+}
+
+
+def check_llm() -> None:
+    p = _LLM_PROVIDERS.get(settings.llm_provider)
+    if p is None:
+        print("\nInterviewer model")
+        print(f"{BAD} unknown interviewer.provider: {settings.llm_provider!r}")
+        print(f"       expected one of: {', '.join(_LLM_PROVIDERS)}")
+        _fail(f"unknown provider {settings.llm_provider!r}")
+        return
+
+    label, key = p["label"], settings.llm_api_key
+    print(f"\n{label} (the interviewer's model)")
+
     try:
         r = httpx.get(
-            "https://api.cerebras.ai/v1/models",
-            headers={"Authorization": f"Bearer {settings.cerebras_api_key}"},
+            f"{p['base_url']}/models",
+            headers={"Authorization": f"Bearer {key}"},
             timeout=15.0,
         )
     except Exception as exc:  # noqa: BLE001
-        print(f"{BAD} could not reach Cerebras: {exc}")
-        _fail("Cerebras unreachable")
+        print(f"{BAD} could not reach {label}: {exc}")
+        _fail(f"{label} unreachable")
         return
 
     if r.status_code == 401:
-        print(f"{BAD} key rejected. Make a new one at cloud.cerebras.ai")
-        _fail("CEREBRAS_API_KEY invalid")
+        print(f"{BAD} key rejected. Make a new one at {p['console']}")
+        _fail(f"{p['key_name']} invalid")
         return
     if r.status_code != 200:
         print(f"{WARN} unexpected response listing models {r.status_code}: {r.text[:120]}")
@@ -57,12 +87,12 @@ def check_cerebras() -> None:
         print(f"{WARN} model {wanted} not in your account's model list")
 
     # Listing models doesn't touch billing; actually running an interview
-    # does. A key can be valid and still be out of quota - that only shows
+    # does. A key can be valid and still be out of credit - that only shows
     # up on a real completion call, so make the smallest one that exists.
     try:
         r = httpx.post(
-            "https://api.cerebras.ai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {settings.cerebras_api_key}"},
+            f"{p['base_url']}/chat/completions",
+            headers={"Authorization": f"Bearer {key}"},
             json={
                 "model": wanted,
                 "messages": [{"role": "user", "content": "hi"}],
@@ -72,17 +102,21 @@ def check_cerebras() -> None:
         )
     except Exception as exc:  # noqa: BLE001
         print(f"{BAD} could not run a completion: {exc}")
-        _fail("Cerebras completion unreachable")
+        _fail(f"{label} completion unreachable")
         return
 
     if r.status_code == 200:
         print(f"{OK} can run a completion")
-    elif r.status_code == 402:
-        print(f"{BAD} out of credit - top up at cloud.cerebras.ai (billing)")
-        _fail("Cerebras out of credit")
-    elif r.status_code == 429:
-        print(f"{BAD} rate limited - check your usage")
-        _fail("Cerebras rate limited")
+    elif r.status_code in (402, 429):
+        # OpenAI reports an exhausted balance as 429 insufficient_quota;
+        # Cerebras uses 402. Same problem, different number.
+        body = r.text.lower()
+        if r.status_code == 402 or "quota" in body or "billing" in body:
+            print(f"{BAD} out of credit - top up at {p['billing']}")
+            _fail(f"{label} out of credit")
+        else:
+            print(f"{BAD} rate limited - check your usage")
+            _fail(f"{label} rate limited")
     else:
         print(f"{WARN} unexpected response running a completion {r.status_code}: {r.text[:120]}")
 
@@ -277,7 +311,7 @@ def main(argv: list[str] | None = None) -> int:
     print("=" * 62)
 
     for check in (
-        check_cerebras,
+        check_llm,
         check_deepgram,
         check_tts,
         check_web,

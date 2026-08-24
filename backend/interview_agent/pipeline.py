@@ -1,5 +1,6 @@
 """PipeCat voice pipeline: mic in -> VAD -> Deepgram STT -> LLM context ->
-Cerebras -> Cartesia TTS -> speaker out, over WebRTC.
+LLM (OpenAI or Cerebras) -> TTS (Deepgram or Cartesia) -> speaker out, over
+WebRTC. Both providers are chosen in config.yaml, same as everywhere else.
 
 Reuses interviewer.py's system-prompt composition unchanged - this is a new
 transport/turn-taking layer in front of the same interview logic Phase 3
@@ -25,6 +26,7 @@ from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.services.cerebras.llm import CerebrasLLMService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
+from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
@@ -80,6 +82,21 @@ def system_prompt(role: str, mode: str, profile: CandidateProfile | None) -> str
     )
 
 
+def _build_llm():
+    """The configured LLM service. Mirrors llm.py's provider choice, but with
+    pipecat's own service classes - the voice path streams, so it can't reuse
+    the plain AsyncOpenAI client."""
+    if settings.llm_provider == "cerebras":
+        return CerebrasLLMService(
+            api_key=settings.cerebras_api_key,
+            settings=CerebrasLLMService.Settings(model=settings.model),
+        )
+    return OpenAILLMService(
+        api_key=settings.openai_api_key,
+        settings=OpenAILLMService.Settings(model=settings.model),
+    )
+
+
 def _build_tts():
     """The configured TTS service. Deepgram by default - it does STT and TTS
     off one key, so the voice pipeline needs no third account."""
@@ -117,10 +134,7 @@ async def start_voice_session(
 
     stt = DeepgramSTTService(api_key=settings.deepgram_api_key)
     tts = _build_tts()
-    llm = CerebrasLLMService(
-        api_key=settings.cerebras_api_key,
-        settings=CerebrasLLMService.Settings(model=settings.model),
-    )
+    llm = _build_llm()
 
     context = LLMContext(
         messages=[{"role": "system", "content": system_prompt(role, mode, profile)}]
