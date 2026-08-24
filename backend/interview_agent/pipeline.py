@@ -50,6 +50,24 @@ def get_runner() -> WorkerRunner:
     return _runner
 
 
+# The worker for the session currently running, if any. One interview at a
+# time: this is a single-user local tool, and starting a second one should
+# stop the first rather than leave two pipelines holding live Deepgram and
+# Cartesia websockets.
+_current_worker: PipelineWorker | None = None
+
+
+async def stop_current_session() -> None:
+    global _current_worker
+    if _current_worker is None:
+        return
+    worker, _current_worker = _current_worker, None
+    try:
+        await worker.cancel()
+    except Exception:  # noqa: BLE001
+        logger.exception("could not cancel the previous voice session")
+
+
 def system_prompt(role: str, mode: str, profile: CandidateProfile | None) -> str:
     """Same composition as InterviewSession.system_prompt() (interviewer.py),
     kept here as a plain function since a voice session has no InterviewSession
@@ -72,6 +90,11 @@ async def start_voice_session(
     registered - the caller (bridge.py) doesn't wait for the interview to
     finish, only for the SDP answer the connection itself produces.
     """
+    global _current_worker
+
+    # Whatever was running is over the moment a new interview starts.
+    await stop_current_session()
+
     stt = DeepgramSTTService(api_key=settings.deepgram_api_key)
     tts = CartesiaTTSService(
         api_key=settings.cartesia_api_key,
@@ -116,7 +139,14 @@ async def start_voice_session(
 
     @transport.event_handler("on_client_disconnected")
     async def _on_disconnected(_transport, _client) -> None:
+        global _current_worker
         logger.info("voice session disconnected: role=%s mode=%s", role, mode)
+        # EndFrame drains the pipeline cleanly; clearing the handle stops
+        # stop_current_session() from later cancelling an already-finished
+        # worker, and lets it be garbage collected.
+        if _current_worker is worker:
+            _current_worker = None
         await worker.queue_frame(EndFrame())
 
+    _current_worker = worker
     await get_runner().add_workers(worker)

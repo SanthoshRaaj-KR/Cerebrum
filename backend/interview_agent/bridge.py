@@ -66,6 +66,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    await pipeline_mod.stop_current_session()
     await pipeline_mod.get_runner().cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await runner_task
