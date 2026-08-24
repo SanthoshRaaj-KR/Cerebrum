@@ -41,7 +41,27 @@ LLM needs only whichever provider you select. Both swaps are one line in
 
 ## Setup
 
-One command, whichever shell you live in:
+### Docker (recommended)
+
+```bash
+cp .env.example .env     # then fill in your keys
+docker compose up
+```
+
+That's it — console on **http://localhost:3000**, backend on
+**http://localhost:7332**. `Ctrl-C` stops both; `docker compose down`
+removes the containers.
+
+`config.yaml` and the source are bind-mounted, so changing a mode, the
+question count or any backend code is a `docker compose restart`, not a
+rebuild. Only a dependency change needs `docker compose build`.
+
+One limitation: **the microphone doesn't work in Docker.** The typed
+interview is fully functional, but WebRTC media is UDP on ephemeral ports
+and aiortc advertises the container's own `172.x` addresses, which your
+browser can't route to. Run on the host if you want to dictate answers.
+
+### On the host
 
 ```bash
 ./start.sh          # Git Bash, MSYS, WSL
