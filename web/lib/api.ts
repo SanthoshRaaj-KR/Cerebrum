@@ -71,3 +71,8 @@ export async function submitAnswer(text: string): Promise<{ question: string }> 
   });
   return asJson(res);
 }
+
+export async function endSession(): Promise<{ summary: string }> {
+  const res = await fetch(`${BRIDGE_URL}/api/session/end`, { method: "POST" });
+  return asJson(res);
+}

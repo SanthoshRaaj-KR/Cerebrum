@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
-import { SystemInfo, getHealth, startSession, submitAnswer } from "@/lib/api";
+import { SystemInfo, endSession, getHealth, startSession, submitAnswer } from "@/lib/api";
 
 type Turn = { speaker: "interviewer" | "you"; text: string };
 
@@ -15,6 +15,7 @@ export default function InterviewTestHarness() {
   const [started, setStarted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
 
   useEffect(() => {
     getHealth()
@@ -57,6 +58,25 @@ export default function InterviewTestHarness() {
     }
   }
 
+  async function handleEnd() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { summary } = await endSession();
+      setSummary(summary);
+      setStarted(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "could not end interview");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleRestart() {
+    setSummary(null);
+    setTurns([]);
+  }
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
@@ -68,7 +88,15 @@ export default function InterviewTestHarness() {
 
         {error && <p className={styles.error}>{error}</p>}
 
-        {!started && (
+        {summary && (
+          <section className={styles.summary}>
+            <h2>Recap</h2>
+            <p>{summary}</p>
+            <button onClick={handleRestart}>Start another</button>
+          </section>
+        )}
+
+        {!started && !summary && (
           <section className={styles.setup}>
             <label>
               Role
@@ -118,6 +146,10 @@ export default function InterviewTestHarness() {
                 {busy ? "..." : "Send"}
               </button>
             </div>
+
+            <button onClick={handleEnd} disabled={busy}>
+              End interview
+            </button>
           </section>
         )}
       </main>
