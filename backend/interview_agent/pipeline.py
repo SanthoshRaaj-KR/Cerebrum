@@ -1,14 +1,16 @@
-"""PipeCat voice pipeline: mic in -> VAD -> Deepgram STT -> LLM context ->
-LLM (OpenAI or Cerebras) -> TTS (Deepgram or Cartesia) -> speaker out, over
-WebRTC. Both providers are chosen in config.yaml, same as everywhere else.
+"""Dictation for the answer box: mic in -> VAD -> Deepgram STT -> back to
+the browser as transcript messages over the WebRTC data channel.
 
-Reuses interviewer.py's system-prompt composition unchanged - this is a new
-transport/turn-taking layer in front of the same interview logic Phase 3
-already verified over text. The pipeline holds its own turn history via
-pipecat's LLMContext (fed by the STT/TTS turn-taking machinery instead of
-interviewer.InterviewSession's manual history list), so the cross-questioning
-instruction in BASE_INSTRUCTIONS works the same way it does in the text
-harness: the model sees the whole conversation every turn.
+This used to be a full spoken interview - the model talked back through
+TTS. The Interview Studio design made the interview typed and graded, so
+the microphone's job shrank to one thing: let someone speak an answer
+instead of typing it. No LLM and no TTS in this path; the transcript
+lands in the textarea and the normal typed flow takes over from there.
+
+Pipecat's RTVIProcessor (attached to every PipelineWorker by default)
+already emits `user-transcription` messages over the data channel, which
+is exactly what web/lib/webrtc.ts listens for - so nothing custom is
+needed between STT and the browser.
 """
 
 from __future__ import annotations
@@ -16,33 +18,23 @@ from __future__ import annotations
 import logging
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.frames.frames import EndFrame, LLMRunFrame
+from pipecat.frames.frames import EndFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
-from pipecat.processors.aggregators.llm_context import LLMContext
-from pipecat.processors.aggregators.llm_response_universal import LLMContextAggregatorPair
 from pipecat.processors.audio.vad_processor import VADProcessor
-from pipecat.services.cartesia.tts import CartesiaTTSService
-from pipecat.services.cerebras.llm import CerebrasLLMService
 from pipecat.services.deepgram.stt import DeepgramSTTService
-from pipecat.services.deepgram.tts import DeepgramTTSService
-from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 from pipecat.workers.runner import WorkerRunner
 
-from interview_agent import prompts
 from interview_agent.config import settings
-from interview_agent.interviewer import _EXPERIENCED_NOTE, _FRESHER_NOTE, BASE_INSTRUCTIONS
-from interview_agent.profile import CandidateProfile
 
 logger = logging.getLogger("interview_agent.pipeline")
 
-# One runner for the whole process, built lazily. WorkerRunner() calls
-# asyncio.get_running_loop() at construction time, so it can't be built at
-# module import (no loop yet) - only from inside bridge.py's async lifespan,
-# which is where get_runner() is first called.
+# One runner for the whole process, built lazily: WorkerRunner() calls
+# asyncio.get_running_loop() at construction, so it cannot be a
+# module-level singleton.
 _runner: WorkerRunner | None = None
 
 
@@ -53,10 +45,8 @@ def get_runner() -> WorkerRunner:
     return _runner
 
 
-# The worker for the session currently running, if any. One interview at a
-# time: this is a single-user local tool, and starting a second one should
-# stop the first rather than leave two pipelines holding live Deepgram and
-# Cartesia websockets.
+# The worker for the mic session currently open, if any. One at a time:
+# opening a second would leave the first holding a live Deepgram socket.
 _current_worker: PipelineWorker | None = None
 
 
@@ -68,82 +58,24 @@ async def stop_current_session() -> None:
     try:
         await worker.cancel()
     except Exception:  # noqa: BLE001
-        logger.exception("could not cancel the previous voice session")
+        logger.exception("could not close the previous microphone session")
 
 
-def system_prompt(role: str, mode: str, profile: CandidateProfile | None) -> str:
-    """Same composition as InterviewSession.system_prompt() (interviewer.py),
-    kept here as a plain function since a voice session has no InterviewSession
-    instance - pipecat's LLMContext holds the turn history instead."""
-    return BASE_INSTRUCTIONS.format(
-        fresher_note=_FRESHER_NOTE if settings.fresher else _EXPERIENCED_NOTE,
-        role_prompt=prompts.role_prompt(role),
-        mode_prompt=prompts.mode_prompt(mode, profile),
-    )
-
-
-def _build_llm():
-    """The configured LLM service. Mirrors llm.py's provider choice, but with
-    pipecat's own service classes - the voice path streams, so it can't reuse
-    the plain AsyncOpenAI client."""
-    if settings.llm_provider == "cerebras":
-        return CerebrasLLMService(
-            api_key=settings.cerebras_api_key,
-            settings=CerebrasLLMService.Settings(model=settings.model),
-        )
-    return OpenAILLMService(
-        api_key=settings.openai_api_key,
-        settings=OpenAILLMService.Settings(model=settings.model),
-    )
-
-
-def _build_tts():
-    """The configured TTS service. Deepgram by default - it does STT and TTS
-    off one key, so the voice pipeline needs no third account."""
-    voice_id = settings.tts_voice_id
-
-    if settings.tts_provider == "cartesia":
-        return CartesiaTTSService(
-            api_key=settings.cartesia_api_key,
-            voice_id=voice_id or None,
-        )
-
-    # config.py already rejects an unknown provider paired with a missing
-    # key; anything else falls through to the default.
-    return DeepgramTTSService(
-        api_key=settings.deepgram_api_key,
-        settings=DeepgramTTSService.Settings(voice=voice_id or "aura-2-thalia-en"),
-    )
-
-
-async def start_voice_session(
-    connection: SmallWebRTCConnection,
-    role: str,
-    mode: str,
-    profile: CandidateProfile | None,
-) -> None:
-    """Builds one interview's voice pipeline against a live WebRTC connection
-    and registers it with the process-wide runner. Returns once the worker is
-    registered - the caller (bridge.py) doesn't wait for the interview to
-    finish, only for the SDP answer the connection itself produces.
-    """
+async def start_dictation(connection: SmallWebRTCConnection, session=None) -> None:
+    """Open the mic for the current interview. `session` is accepted so the
+    caller can pass context later (per-mode vocabulary hints, say); the
+    transcript itself is candidate-agnostic."""
     global _current_worker
 
-    # Whatever was running is over the moment a new interview starts.
     await stop_current_session()
 
     stt = DeepgramSTTService(api_key=settings.deepgram_api_key)
-    tts = _build_tts()
-    llm = _build_llm()
-
-    context = LLMContext(
-        messages=[{"role": "system", "content": system_prompt(role, mode, profile)}]
-    )
-    aggregators = LLMContextAggregatorPair(context)
 
     transport = SmallWebRTCTransport(
         webrtc_connection=connection,
-        params=TransportParams(audio_in_enabled=True, audio_out_enabled=True),
+        # Audio in only. Nothing is spoken back, so there is no output
+        # stream to negotiate.
+        params=TransportParams(audio_in_enabled=True, audio_out_enabled=False),
     )
 
     pipeline = Pipeline(
@@ -151,11 +83,6 @@ async def start_voice_session(
             transport.input(),
             VADProcessor(vad_analyzer=SileroVADAnalyzer()),
             stt,
-            aggregators.user(),
-            llm,
-            tts,
-            transport.output(),
-            aggregators.assistant(),
         ]
     )
 
@@ -163,18 +90,12 @@ async def start_voice_session(
 
     @transport.event_handler("on_client_connected")
     async def _on_connected(_transport, _client) -> None:
-        # The system prompt is already in context; this kicks off the
-        # interviewer's opening question without a fake user turn.
-        logger.info("voice session connected: role=%s mode=%s", role, mode)
-        await worker.queue_frame(LLMRunFrame())
+        logger.info("microphone opened")
 
     @transport.event_handler("on_client_disconnected")
     async def _on_disconnected(_transport, _client) -> None:
         global _current_worker
-        logger.info("voice session disconnected: role=%s mode=%s", role, mode)
-        # EndFrame drains the pipeline cleanly; clearing the handle stops
-        # stop_current_session() from later cancelling an already-finished
-        # worker, and lets it be garbage collected.
+        logger.info("microphone closed")
         if _current_worker is worker:
             _current_worker = None
         await worker.queue_frame(EndFrame())
