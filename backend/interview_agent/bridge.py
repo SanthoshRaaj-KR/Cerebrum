@@ -74,10 +74,21 @@ def _session_state(session: interviewer_mod.InterviewSession) -> dict:
         "index": session.index,
         "total": session.total,
         "finished": session.finished,
+        # The sidebar shows what was actually asked, not what was planned -
+        # the interviewer deviates from the plan whenever it challenges a
+        # claim or re-asks a dodged question, and a label that still read
+        # "REST API design" next to a question about password storage would
+        # be lying. The grader labels the question it just graded; unasked
+        # slots fall back to the plan's own label.
         "plan": [
             {
                 "num": i + 1,
-                "short": s.short,
+                "short": (
+                    (session.turns[i].grade.topic if session.turns[i].grade else "")
+                    or session.turns[i].short
+                    if i < len(session.turns)
+                    else s.short
+                ),
                 "score": (
                     session.turns[i].grade.score
                     if i < len(session.turns) and session.turns[i].grade

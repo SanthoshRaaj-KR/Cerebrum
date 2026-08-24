@@ -35,6 +35,7 @@ class Grade:
     verdict: str
     strength: str
     gap: str
+    topic: str = ""
     rubric: list[DimScore] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -56,11 +57,12 @@ _SCHEMA = {
                 "additionalProperties": False,
             },
         },
+        "topic": {"type": "string"},
         "verdict": {"type": "string"},
         "strength": {"type": "string"},
         "gap": {"type": "string"},
     },
-    "required": ["dimensions", "verdict", "strength", "gap"],
+    "required": ["dimensions", "topic", "verdict", "strength", "gap"],
     "additionalProperties": False,
 }
 
@@ -78,6 +80,23 @@ candidate's time:
 - 4-5.9: partially right, or too general to evaluate.
 - 1-3.9: wrong, evasive, or essentially non-responsive.
 A skipped or empty answer scores 1 across the board.
+
+Two things to get right, because they are easy to score badly:
+- A candidate who plainly says "I don't know" is not the same as one who
+  bluffs. Correctness and depth are still low - they didn't answer - but
+  do not punish the communication dimension for it, and say in the
+  strength field that being straight about it beats guessing. Bluffing a
+  confident wrong answer should score BELOW an honest admission.
+- A confidently stated wrong claim is worse than a vague one. Score
+  correctness at the bottom of the range and name the error plainly in
+  the gap, so they don't walk away still believing it.
+
+Also write:
+- topic: a 2-4 word label for what this question was actually about, for
+  the progress sidebar. Label the question that was ASKED, not the answer
+  given - if the interviewer challenged a claim, that challenge is the
+  topic. Examples: "Index write cost", "Password storage", "JWT
+  revocation". Not a sentence.
 
 Then write, addressed to the candidate as "you":
 - verdict: where this lands, in at most eight words. It renders inline
@@ -102,6 +121,7 @@ def _fallback(mode: Mode, answered: bool) -> Grade:
     return Grade(
         score=0.0,
         verdict="Grading was unavailable for this answer.",
+        topic="",
         strength="",
         gap="",
         rubric=[DimScore(name=d, score=0.0) for d in mode.dims],
@@ -163,6 +183,7 @@ async def grade(
 
     return Grade(
         score=overall,
+        topic=str(payload.get("topic", "")).strip(),
         verdict=str(payload.get("verdict", "")).strip(),
         strength=str(payload.get("strength", "")).strip(),
         gap=str(payload.get("gap", "")).strip(),

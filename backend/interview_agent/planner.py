@@ -68,14 +68,23 @@ before it starts. Lay out exactly {count} questions, in the order you will
 ask them.
 
 Shape it the way a real interview is actually run:
-- Question 1 is a warm-up that gets them talking and settled. Never open
-  with the hardest thing you plan to ask.
+- Question 1 is a warm-up: still technical, but the most approachable
+  thing on the list, and wherever the résumé gives you something real,
+  anchored in something they actually built. Opening cold with a
+  definition question ("what is an index") wastes the one question that
+  is meant to settle them and show you what they've done. Never open with
+  the hardest thing you plan to ask.
 - The middle questions are the substance. Go deep on two or three areas
   rather than touching {count} unrelated ones - consecutive questions
   working the same area from different angles is good interviewing.
-- Difficulty escalates. The last technical question should be meaningfully
-  harder than the first.
-- The final question closes the interview off.
+- Difficulty escalates. The last question should be meaningfully harder
+  than the first.
+
+Every slot must be technically substantive. This is practice for a
+technical round, and there are only {count} questions - do not spend one
+on "is there anything else you'd like to share", "what are you passionate
+about", or anything else that cannot be answered wrongly. There is no
+soft close: the final slot is the hardest question, not a wind-down.
 
 For each question give:
 - short: a 2-4 word label for the progress sidebar, e.g. "Indexing cost"
