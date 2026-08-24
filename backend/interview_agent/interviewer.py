@@ -13,18 +13,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from openai import AsyncOpenAI
-
 from interview_agent import prompts
 from interview_agent.config import settings
+from interview_agent.llm import client
 from interview_agent.profile import CandidateProfile
 
 logger = logging.getLogger("interview_agent.interviewer")
 
-CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
-
 # A spoken interview question, not an essay - keeps latency down once this
-# runs through TTS in Phase 4.
+# runs through TTS in the voice pipeline.
 MAX_TOKENS = 300
 
 BASE_INSTRUCTIONS = """\
@@ -74,20 +71,6 @@ class UnknownRoleOrMode(ValueError):
     """role or mode isn't one prompts.py knows how to build a prompt for."""
 
 
-# A fresh AsyncOpenAI() opens its own httpx connection pool that nothing
-# ever closes; an interview runs many turns through this, so a new client
-# per turn would leak a socket per question. One shared client, built on
-# first use, avoids it.
-_client_instance: AsyncOpenAI | None = None
-
-
-def _client() -> AsyncOpenAI:
-    global _client_instance
-    if _client_instance is None:
-        _client_instance = AsyncOpenAI(
-            api_key=settings.cerebras_api_key, base_url=CEREBRAS_BASE_URL
-        )
-    return _client_instance
 
 
 def _history_kept() -> int:
@@ -146,24 +129,28 @@ class InterviewSession:
         if not self.history:
             return "The interview hadn't started yet - nothing to recap."
 
+        instruction = (
+            "The interview is over. Write a brief (3-5 sentence) recap for the "
+            "candidate: what topics came up, and in general terms how they came "
+            "across (strong on X, shaky on Y) - not a numeric score, just an "
+            "honest, encouraging summary a real interviewer might give verbally "
+            "at the end. Write the recap itself, addressed to the candidate. Do "
+            "not ask another question and do not continue the interview."
+        )
+        # The instruction goes last, as a user turn, not only up front as a
+        # system message. History ends on the interviewer's unanswered
+        # question, and with the instruction only at the top the model just
+        # carries the conversation on - it answered its own last question in
+        # the candidate's voice instead of recapping.
         messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You just finished conducting the mock interview below. "
-                    "Write a brief (3-5 sentence) recap for the candidate: what "
-                    "topics/questions came up, and in general terms how they came "
-                    "across (strong on X, shaky on Y) - not a numeric score, just "
-                    "an honest, encouraging summary a real interviewer might give "
-                    "verbally at the end."
-                ),
-            },
+            {"role": "system", "content": "You are the interviewer who just ran this mock interview."},
             *self.history,
+            {"role": "user", "content": instruction},
         ]
         return await self._complete(messages)
 
     async def _complete(self, messages: list[dict[str, str]]) -> str:
-        completion = await _client().chat.completions.create(
+        completion = await client().chat.completions.create(
             model=settings.model,
             messages=messages,  # type: ignore[arg-type]
             max_tokens=MAX_TOKENS,

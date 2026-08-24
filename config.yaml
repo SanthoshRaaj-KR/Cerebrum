@@ -9,10 +9,14 @@ candidate:
   fresher: true
 
 interviewer:
-  # Only gpt-oss-120b and gemma-4-31b are available on this Cerebras
-  # account (checked via /v1/models) - gpt-oss-120b is also pipecat's own
-  # CerebrasLLMService default.
-  model: gpt-oss-120b
+  # openai or cerebras. Cerebras is much faster (which matters for a spoken
+  # interview), so prefer it when its account has credit; openai is the
+  # default because it's the one known to work here.
+  provider: openai
+  # Must be a model the chosen provider actually serves: gpt-4o-mini for
+  # openai; gpt-oss-120b or gemma-4-31b for cerebras (the only two this
+  # account exposes, checked via /v1/models).
+  model: gpt-4o-mini
   # How many prior turns (question+answer pairs, not messages) stay in the
   # LLM context. Too small and cross-questioning loses the thread; too large
   # and the model spends its window rereading a whole interview each turn.

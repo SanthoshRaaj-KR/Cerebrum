@@ -11,13 +11,11 @@ import io
 import json
 from dataclasses import asdict, dataclass, field
 
-from openai import AsyncOpenAI
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
 from interview_agent.config import settings
-
-CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
+from interview_agent.llm import client
 
 # Resumes rarely run past a few hundred KB; this is a generous ceiling meant
 # to reject something wrong (a video, a zip) rather than a real resume.
@@ -114,23 +112,10 @@ def extract_text(pdf_bytes: bytes) -> str:
     return text
 
 
-# A fresh AsyncOpenAI() opens its own httpx connection pool that nothing
-# ever closes; over many resume uploads that's a slow socket leak. One
-# shared client, built on first use, avoids it.
-_client_instance: AsyncOpenAI | None = None
-
-
-def _client() -> AsyncOpenAI:
-    global _client_instance
-    if _client_instance is None:
-        _client_instance = AsyncOpenAI(
-            api_key=settings.cerebras_api_key, base_url=CEREBRAS_BASE_URL
-        )
-    return _client_instance
 
 
 async def structure(raw_text: str) -> CandidateProfile:
-    completion = await _client().chat.completions.create(
+    completion = await client().chat.completions.create(
         model=settings.model,
         messages=[
             {"role": "system", "content": _STRUCTURE_PROMPT},

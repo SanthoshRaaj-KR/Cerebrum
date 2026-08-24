@@ -15,17 +15,19 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 load_dotenv(ROOT / ".env")
 
-# Cartesia is deliberately not here: the default TTS provider is Deepgram,
-# which uses the same key as STT. CARTESIA_API_KEY is only needed if
-# config.yaml's voice.tts.provider is switched to cartesia, and that case is
-# checked at load time below rather than demanded from everyone.
-_REQUIRED = ["CEREBRAS_API_KEY", "DEEPGRAM_API_KEY"]
+# Only Deepgram is unconditionally required - it does both STT and TTS, so
+# every voice session needs it. The LLM key depends on interviewer.provider,
+# and Cartesia only matters if voice.tts.provider selects it; both are
+# checked against the actual config at load time rather than demanded from
+# everyone.
+_REQUIRED = ["DEEPGRAM_API_KEY"]
 
 
 @dataclass
 class Settings:
-    cerebras_api_key: str
     deepgram_api_key: str
+    openai_api_key: str = ""
+    cerebras_api_key: str = ""
     cartesia_api_key: str = ""
     raw: dict[str, Any] = field(default_factory=dict)
 
@@ -51,8 +53,22 @@ class Settings:
         return bool(self.candidate.get("fresher", True))
 
     @property
+    def llm_provider(self) -> str:
+        return str(self.interviewer.get("provider", "openai")).lower()
+
+    @property
     def model(self) -> str:
-        return str(self.interviewer.get("model", "llama-3.3-70b"))
+        default = "gpt-oss-120b" if self.llm_provider == "cerebras" else "gpt-4o-mini"
+        return str(self.interviewer.get("model", default))
+
+    @property
+    def llm_api_key(self) -> str:
+        """The key for whichever provider is selected."""
+        return (
+            self.cerebras_api_key
+            if self.llm_provider == "cerebras"
+            else self.openai_api_key
+        )
 
     @property
     def remember_turns(self) -> int:
@@ -90,11 +106,26 @@ def load_settings() -> Settings:
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
 
     settings = Settings(
-        cerebras_api_key=os.environ["CEREBRAS_API_KEY"],
         deepgram_api_key=os.environ["DEEPGRAM_API_KEY"],
+        openai_api_key=os.environ.get("OPENAI_API_KEY", "").strip(),
+        cerebras_api_key=os.environ.get("CEREBRAS_API_KEY", "").strip(),
         cartesia_api_key=os.environ.get("CARTESIA_API_KEY", "").strip(),
         raw=raw,
     )
+
+    if not settings.llm_api_key:
+        needed = (
+            "CEREBRAS_API_KEY" if settings.llm_provider == "cerebras" else "OPENAI_API_KEY"
+        )
+        other = "openai" if settings.llm_provider == "cerebras" else "cerebras"
+        print(
+            f"\nInterview Agent cannot start - config.yaml sets"
+            f" interviewer.provider to {settings.llm_provider}, but {needed} is"
+            f" not in .env.\nEither add the key, or switch the provider to"
+            f" {other}.\n",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
 
     if settings.tts_provider == "cartesia" and not settings.cartesia_api_key:
         print(
