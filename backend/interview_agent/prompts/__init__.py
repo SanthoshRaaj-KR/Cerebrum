@@ -1,44 +1,80 @@
-"""Role and mode prompt templates, looked up by the config-declared names.
+"""The interview modes.
 
-Adding a role or mode means: add it to config.yaml's interviewer.roles/modes,
-add a module here, and register it below. Nothing else needs to change.
+A mode is the whole choice now - it carries its own question territory,
+its own rubric dimensions, and its own sense of what a good answer looks
+like. What used to be a separate "role" axis is just free text the
+candidate types (see context.CandidateContext), because in practice the
+mode is what decides which questions get asked.
+
+Adding a mode means: add a module here exporting NAME/BLURB/DIMS/PROMPT,
+register it in _MODES below, and add its key to config.yaml's
+interviewer.modes.
 """
 
 from __future__ import annotations
 
-from interview_agent.profile import CandidateProfile
+from dataclasses import dataclass
+
+from interview_agent.context import CandidateContext
 from interview_agent.prompts import (
     ai_engineer,
-    backend_engineer,
     computer_fundamentals,
-    full_stack_developer,
     resume_projects,
-    system_design,
+    sde_backend,
+    system_design_hld,
+    system_design_lld,
 )
 
-_ROLES: dict[str, str] = {
-    "ai_engineer": ai_engineer.PROMPT,
-    "backend_engineer": backend_engineer.PROMPT,
-    "full_stack_developer": full_stack_developer.PROMPT,
+
+@dataclass(frozen=True)
+class Mode:
+    key: str
+    name: str
+    blurb: str
+    dims: tuple[str, ...]
+    prompt: str
+
+
+def _mode(key: str, module) -> Mode:
+    return Mode(
+        key=key,
+        name=module.NAME,
+        blurb=module.BLURB,
+        dims=tuple(module.DIMS),
+        prompt=module.PROMPT,
+    )
+
+
+_MODES: dict[str, Mode] = {
+    m.key: m
+    for m in (
+        _mode("resume_projects", resume_projects),
+        _mode("sde_backend", sde_backend),
+        _mode("computer_fundamentals", computer_fundamentals),
+        _mode("system_design_hld", system_design_hld),
+        _mode("system_design_lld", system_design_lld),
+        _mode("ai_engineer", ai_engineer),
+    )
 }
 
-_MODES: dict[str, object] = {
-    "resume_projects": resume_projects.build,
-    "computer_fundamentals": lambda _profile: computer_fundamentals.PROMPT,
-    "system_design": lambda _profile: system_design.PROMPT,
-}
+
+class UnknownMode(ValueError):
+    """No mode registered under that key."""
 
 
-def role_prompt(role: str) -> str:
+def get(key: str) -> Mode:
     try:
-        return _ROLES[role]
+        return _MODES[key]
     except KeyError:
-        raise ValueError(f"unknown role: {role!r}") from None
+        raise UnknownMode(f"unknown mode: {key!r}") from None
 
 
-def mode_prompt(mode: str, profile: CandidateProfile | None) -> str:
-    try:
-        builder = _MODES[mode]
-    except KeyError:
-        raise ValueError(f"unknown mode: {mode!r}") from None
-    return builder(profile)  # type: ignore[operator]
+def known() -> list[str]:
+    return list(_MODES)
+
+
+def mode_prompt(key: str, candidate: CandidateContext) -> str:
+    """The mode's own instructions plus who's being interviewed. Every mode
+    gets the candidate block - even a system-design round opens better when
+    it can pitch the problem near something they've actually worked on."""
+    return f"{get(key).prompt}\n\n{candidate.describe()}"

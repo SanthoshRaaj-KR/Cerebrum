@@ -21,18 +21,21 @@ interviewer:
   # LLM context. Too small and cross-questioning loses the thread; too large
   # and the model spends its window rereading a whole interview each turn.
   remember_turns: 20
-  # Roles selectable in the UI. Each must have a matching prompt template in
-  # backend/interview_agent/prompts/.
-  roles:
-    - ai_engineer
-    - backend_engineer
-    - full_stack_developer
-  # Modes selectable in the UI. Each must have a matching prompt template in
-  # backend/interview_agent/prompts/.
+  # How many questions a session runs before the report. The plan is built
+  # to this length, and it's what "Q3 of 6" counts against.
+  questions_per_session: 6
+  # Modes selectable in the UI, in the order the cards appear. Each needs a
+  # matching module in backend/interview_agent/prompts/ registered in that
+  # package's __init__. There is no separate role list any more - the mode
+  # decides the questions, and the candidate types their own target role and
+  # level on the résumé screen.
   modes:
     - resume_projects
+    - sde_backend
     - computer_fundamentals
-    - system_design
+    - system_design_hld
+    - system_design_lld
+    - ai_engineer
 
 voice:
   stt:

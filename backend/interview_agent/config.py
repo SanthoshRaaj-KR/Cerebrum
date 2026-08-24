@@ -75,12 +75,14 @@ class Settings:
         return int(self.interviewer.get("remember_turns", 20))
 
     @property
-    def roles(self) -> list[str]:
-        return list(self.interviewer.get("roles", []))
-
-    @property
     def modes(self) -> list[str]:
         return list(self.interviewer.get("modes", []))
+
+    @property
+    def questions_per_session(self) -> int:
+        # Below 3 there's no interview to speak of; above 12 the plan and
+        # the history stop fitting comfortably in one session.
+        return max(3, min(12, int(self.interviewer.get("questions_per_session", 6))))
 
     @property
     def tts_provider(self) -> str:
