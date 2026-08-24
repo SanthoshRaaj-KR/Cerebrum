@@ -1,4 +1,7 @@
-export const BRIDGE_URL = "http://127.0.0.1:7332";
+// Set by docker compose; falls back to the local default so running the
+// console with `npm run dev` outside Docker needs no configuration.
+export const BRIDGE_URL =
+  process.env.NEXT_PUBLIC_BRIDGE_URL || "http://127.0.0.1:7332";
 
 export type Project = {
   name: string;

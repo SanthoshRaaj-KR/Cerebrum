@@ -1,0 +1,55 @@
+# Interview Agent — one command brings the whole thing up:
+#
+#     docker compose up
+#
+# Console: http://localhost:3000   Backend: http://localhost:7332
+#
+# Keys come from .env in this directory (copy .env.example first).
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    ports:
+      - "127.0.0.1:7332:7332"
+    volumes:
+      # Behavior lives in config.yaml, so editing a mode or the question
+      # count is a container restart, not a rebuild.
+      - ./config.yaml:/app/config.yaml:ro
+      # Source mounted so a backend edit is a restart, not a rebuild. The
+      # image already contains this; the mount just keeps it current.
+      - ./backend:/app/backend:ro
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      # Live edits to the console without a rebuild.
+      - ./web:/app
+      # Anonymous volumes shadow the bind mount for these two: node_modules
+      # is installed inside the image for linux/arm64 or amd64 and must not
+      # be overwritten by the host's Windows-built copy, and .next is build
+      # output that shouldn't leak back onto the host.
+      - /app/node_modules
+      - /app/.next
+    environment:
+      # The browser reaches the backend on the published host port, not on
+      # the compose network — it runs outside Docker.
+      - NEXT_PUBLIC_BRIDGE_URL=http://localhost:7332
+    restart: unless-stopped
+
+# A note on the microphone: the typed interview works fully in Docker, but
+# the mic (WebRTC) generally will not. aiortc gathers ICE candidates from
+# the container's own interfaces (172.x.x.x), which the browser cannot
+# route to, and the media path is UDP on ephemeral ports rather than the
+# one TCP port published above. Run the backend on the host (./start.ps1)
+# if you want to dictate answers.
