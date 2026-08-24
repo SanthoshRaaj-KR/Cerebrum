@@ -12,7 +12,7 @@ off a list.
   the voice pipeline        one PipeCat pipeline per session, over WebRTC
       │
       ├── Deepgram            speech-to-text
-      ├── Cerebras            the interviewer's model - asks, follows up, cross-questions
+      ├── OpenAI / Cerebras   the interviewer's model - asks, follows up, cross-questions
       └── Deepgram            text-to-speech (or Cartesia, if you switch it)
       │
       ▼
@@ -30,14 +30,14 @@ calibrated for a fresher candidate by default (`candidate.fresher` in
 
 | Piece | What | Cost |
 |---|---|---|
-| The interviewer | Cerebras | Pay-as-you-go - [cloud.cerebras.ai](https://cloud.cerebras.ai) billing |
+| The interviewer | OpenAI (default) | Your existing credits - [platform.openai.com](https://platform.openai.com/api-keys) |
+| The interviewer (faster alternative) | Cerebras | Set `interviewer.provider: cerebras` - [cloud.cerebras.ai](https://cloud.cerebras.ai) |
 | Speech-to-text **and** text-to-speech | Deepgram | Free tier available - [console.deepgram.com](https://console.deepgram.com) |
 | Text-to-speech (optional alternative) | Cartesia | Only if you switch `voice.tts.provider` - [play.cartesia.ai](https://play.cartesia.ai) |
 
-**Two keys, not three.** Deepgram does both STT and TTS off one key, so the
-voice pipeline needs no third account. Cartesia stays wired up as an option
-if you prefer its voices - set `voice.tts.provider: cartesia` in
-`config.yaml` and add `CARTESIA_API_KEY` to `.env`.
+**Two keys, not four.** Deepgram does both STT and TTS off one key, and the
+LLM needs only whichever provider you select. Both swaps are one line in
+`config.yaml`.
 
 ## Setup
 
@@ -76,17 +76,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
 
 Two keys go in `.env` - see `.env.example`:
 
-- **Cerebras** - [cloud.cerebras.ai](https://cloud.cerebras.ai) → create an
-  API key, and make sure the account has credit. `doctor.py` checks this
-  with a real (1-token) completion call, not just a valid-key check -
-  listing models succeeds on an unfunded account, but running an interview
-  doesn't.
+- **The LLM key** for whichever `interviewer.provider` you selected:
+  `OPENAI_API_KEY` (the default) or `CEREBRAS_API_KEY`. Either way,
+  `doctor.py` checks it with a real 1-token completion, not just a
+  valid-key check - listing models succeeds on an account with no credit
+  left, but running an interview doesn't.
 - **Deepgram** - [console.deepgram.com](https://console.deepgram.com) →
   create an API key. Used for both hearing your answers and speaking the
   questions.
 
-`CARTESIA_API_KEY` is optional and only read when `voice.tts.provider` is
-set to `cartesia`; leaving it blank is fine.
+The other two keys are optional: the LLM provider you *didn't* pick, and
+`CARTESIA_API_KEY` (only read when `voice.tts.provider` is `cartesia`).
+Leaving them blank is fine - startup only demands the ones your config
+actually uses, and names the missing one if you switch providers without
+adding its key.
 
 Check all three before relying on them:
 
@@ -138,14 +141,20 @@ memory and reset the moment it stops.
 
 ## Status
 
-Every phase up through the voice pipeline and web UI is built and, where a
-real key made it possible, verified live - not just structurally. Both
-Deepgram websockets (STT and TTS) have been confirmed connecting inside the
-running pipeline.
+`.\start.ps1 -Check` passes fully green on the default (OpenAI + Deepgram)
+setup, and the whole text path is verified working end to end: a real
+resume PDF uploads and parses into structured projects/skills, the
+interviewer opens with a question grounded in one of those actual projects,
+and follow-ups reference what the candidate just said rather than jumping
+topic. The voice pipeline builds and both Deepgram websockets (STT and TTS)
+connect inside the running session.
 
-The one remaining blocker is **Cerebras account credit**: the key
-authenticates and the model is available, but completions return `402
-Payment required`, so a full spoken interview hasn't been run end to end
-yet. Top up at [cloud.cerebras.ai](https://cloud.cerebras.ai) and
-`.\start.ps1 -Check` will go green. The commit history has the specifics of
-what was and wasn't testable at each step.
+What hasn't been exercised yet is a **spoken** interview through a real
+browser microphone - the WebRTC handshake has only been driven by synthetic
+offers, never by an actual mic. That's the part to try first, and the most
+likely place to find something still rough.
+
+Cerebras is wired up and worth switching to when its account has credit -
+it's substantially faster, which matters when a person is waiting for the
+next question out loud. Right now that account returns `402 Payment
+required` on completions, which is why OpenAI is the default.
