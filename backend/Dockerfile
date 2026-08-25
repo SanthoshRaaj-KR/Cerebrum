@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # The interview backend: FastAPI + pipecat.
 #
 # python:3.13-slim rather than alpine — pipecat pulls in onnxruntime,
@@ -17,8 +18,14 @@ WORKDIR /app
 # Dependencies first, as their own layer: requirements.txt changes far less
 # often than the source, so rebuilds after a code edit skip the whole
 # ~700MB install.
+#
+# The cache mount holds pip's downloaded wheels between builds, so *changing*
+# requirements.txt re-installs from local wheels instead of re-downloading
+# 700MB from PyPI. It's a build-time mount, not a layer, so the image stays
+# exactly as small as it was with --no-cache-dir.
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 COPY backend/ ./backend/
 
