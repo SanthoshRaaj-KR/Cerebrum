@@ -1,5 +1,6 @@
 """Run scripted interviews against a running backend and print transcripts.
 
+    python tools/quality_check.py live            # sit the interview yourself
     python tools/quality_check.py                 # realistic mixed answers
     python tools/quality_check.py hostile         # wrong claims, does it push back?
     python tools/quality_check.py modes           # plan + opener for every mode
@@ -146,6 +147,86 @@ def post_get(path: str) -> dict:
         return json.loads(r.read())
 
 
+def live() -> None:
+    """Sit the interview yourself from the terminal.
+
+    The web console isn't wired to this API yet, and reading scripted
+    transcripts is a poor substitute for being on the receiving end of a
+    follow-up you didn't expect.
+    """
+    modes = post_get("/api/health")["system"]["modes"]
+    print("\n  Modes\n")
+    for i, m in enumerate(modes, 1):
+        print(f"   {i}. {m['name']}")
+        print(f"      {m['blurb']}")
+        print(f"      graded on: {', '.join(m['dims'])}\n")
+
+    while True:
+        raw = input(f"  Pick a mode [1-{len(modes)}]: ").strip()
+        if raw.isdigit() and 1 <= int(raw) <= len(modes):
+            mode = modes[int(raw) - 1]
+            break
+
+    role = input("  Target role  [Backend Engineer]: ").strip() or "Backend Engineer"
+    level = input("  Level        [Fresher]: ").strip() or "Fresher"
+    print("  Résumé - paste it, then a blank line (or just press enter to skip):")
+    lines: list[str] = []
+    while True:
+        line = input()
+        if not line:
+            break
+        lines.append(line)
+    resume = "\n".join(lines)
+
+    print("\n  Building the question plan...\n")
+    post("/api/session/reset")
+    st = post(
+        "/api/session/start",
+        {"mode": mode["key"], "role": role, "level": level, "resume": resume},
+    )
+    print("  Plan:", " -> ".join(p["short"] for p in st["plan"]), "\n")
+
+    while not st["finished"]:
+        i = st["index"]
+        turn = st["turns"][i]
+        print("=" * 72)
+        print(f"  Q{i + 1} of {st['total']}\n")
+        print(f"  {turn['question']}\n")
+        if turn.get("hint"):
+            print(f"  (hint: {turn['hint']})\n")
+        print("  Your answer - blank line to submit, or 'skip':")
+
+        buf: list[str] = []
+        while True:
+            line = input()
+            if not line:
+                break
+            buf.append(line)
+        text = "\n".join(buf).strip()
+        skipped = not text or text.lower() == "skip"
+
+        print("\n  grading...\n")
+        st = post("/api/session/answer", {"text": "" if skipped else text, "skipped": skipped})
+        g = st["turns"][i]["grade"]
+        dims = "   ".join(f"{r['name']} {r['score']}" for r in g["rubric"])
+        print(f"  {g['score']}/10   {g['verdict']}")
+        print(f"  {dims}")
+        print(f"  worked : {g['strength']}")
+        print(f"  missing: {g['gap']}")
+        print(f"  running average: {st['average']}\n")
+
+    rep = post("/api/session/report")
+    print("=" * 72)
+    print(f"\n  {rep['report']['headline']}")
+    print(f"  Average {rep['average']}/10")
+    for d in rep["dimensionAverages"]:
+        print(f"    {d['name']}: {d['score']}")
+    print()
+    for n in rep["report"]["notes"]:
+        print(f"  - {n}")
+    print()
+
+
 def main() -> int:
     scenario = sys.argv[1] if len(sys.argv) > 1 else "realistic"
     try:
@@ -154,6 +235,14 @@ def main() -> int:
         print(f"backend not reachable at {BASE}: {exc}", file=sys.stderr)
         print("start it with `docker compose up` first.", file=sys.stderr)
         return 1
+
+    if scenario == "live":
+        try:
+            live()
+        except (KeyboardInterrupt, EOFError):
+            print("\n  ended.\n")
+            post("/api/session/reset")
+        return 0
 
     if scenario == "hostile":
         run(
