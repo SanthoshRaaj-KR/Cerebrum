@@ -1,24 +1,18 @@
 import { BRIDGE_URL } from "./api";
 
-export type VoiceStatus =
-  | "idle"
-  | "connecting"
-  | "connected"
-  | "failed"
-  | "ended";
+export type MicStatus = "idle" | "connecting" | "listening" | "failed" | "ended";
 
-export type TranscriptSpeaker = "interviewer" | "you";
-
-export type VoiceSessionHandlers = {
-  onStatusChange: (status: VoiceStatus) => void;
+export type MicHandlers = {
+  onStatusChange: (status: MicStatus) => void;
   onError: (message: string) => void;
-  onTranscript: (speaker: TranscriptSpeaker, text: string) => void;
+  /** A finalised chunk of speech, to be appended to the answer box. */
+  onTranscript: (text: string) => void;
 };
 
 // Pipecat's RTVI message shapes (pipecat.processors.frameworks.rtvi.models),
-// sent as JSON over the data channel we open below. Only the two transcript
-// message types are handled here - RTVI carries a lot more (speaking
-// state, metrics, function calls) that this UI has no use for yet.
+// sent as JSON over the data channel we open below. The backend pipeline is
+// dictation only - transport -> VAD -> Deepgram STT, no LLM and no TTS - so
+// the only message that matters here is the user's own transcription.
 type RtviMessage = {
   label: string;
   type: string;
@@ -26,25 +20,27 @@ type RtviMessage = {
 };
 
 /**
- * One WebRTC voice session against the bridge's /api/offer endpoint
- * (pipecat's SmallWebRTCTransport on the other end). Non-trickle ICE: we
- * wait for gathering to finish before sending the offer, which is simpler
- * than a separate candidate-patching endpoint and is plenty fast for a
- * same-machine, local-only connection - there's no NAT to traverse.
+ * Microphone dictation over WebRTC against the bridge's /api/offer endpoint
+ * (pipecat's SmallWebRTCTransport on the other end). Speech goes up, text
+ * comes back on the data channel, and it lands in the answer box - the
+ * interview itself stays a request/response over the REST API.
+ *
+ * Non-trickle ICE: we wait for gathering to finish before sending the
+ * offer, which is simpler than a separate candidate-patching endpoint and
+ * is plenty fast for a same-machine connection - there's no NAT to
+ * traverse.
  */
-export class VoiceSession {
+export class MicSession {
   private pc: RTCPeerConnection | null = null;
   private micStream: MediaStream | null = null;
   private dataChannel: RTCDataChannel | null = null;
-  private readonly audioEl: HTMLAudioElement;
-  private readonly handlers: VoiceSessionHandlers;
+  private readonly handlers: MicHandlers;
 
-  constructor(audioEl: HTMLAudioElement, handlers: VoiceSessionHandlers) {
-    this.audioEl = audioEl;
+  constructor(handlers: MicHandlers) {
     this.handlers = handlers;
   }
 
-  async start(role: string, mode: string): Promise<void> {
+  async start(): Promise<void> {
     this.handlers.onStatusChange("connecting");
 
     let micStream: MediaStream;
@@ -64,10 +60,6 @@ export class VoiceSession {
 
     micStream.getTracks().forEach((track) => pc.addTrack(track, micStream));
 
-    pc.ontrack = (event) => {
-      this.audioEl.srcObject = event.streams[0];
-    };
-
     // Pipecat's SmallWebRTCConnection only ever listens for a data channel
     // WE open (aiortc's "datachannel" event fires for a channel created by
     // the remote peer) - it never creates one itself. Must exist before
@@ -77,10 +69,13 @@ export class VoiceSession {
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "connected") {
-        this.handlers.onStatusChange("connected");
+        this.handlers.onStatusChange("listening");
       } else if (pc.connectionState === "failed") {
         this.handlers.onStatusChange("failed");
-        this.handlers.onError("Voice connection failed.");
+        this.handlers.onError(
+          "Mic connection failed. If the backend is in Docker this is expected - " +
+            "WebRTC media can't reach the container. Type your answer instead."
+        );
       } else if (pc.connectionState === "closed") {
         this.handlers.onStatusChange("ended");
       }
@@ -97,7 +92,6 @@ export class VoiceSession {
         body: JSON.stringify({
           sdp: pc.localDescription!.sdp,
           type: pc.localDescription!.type,
-          request_data: { role, mode },
         }),
       });
       const body = await res.json();
@@ -123,17 +117,6 @@ export class VoiceSession {
     this.handlers.onStatusChange("ended");
   }
 
-  /** Toggles the mic track's enabled state (not the connection) and
-   * returns whether it's now muted. Muting this way keeps the WebRTC
-   * connection and audio track alive - it just stops sending real audio -
-   * which is far cheaper than tearing down and renegotiating the session. */
-  toggleMute(): boolean {
-    const track = this.micStream?.getAudioTracks()[0];
-    if (!track) return false;
-    track.enabled = !track.enabled;
-    return !track.enabled;
-  }
-
   private handleDataChannelMessage(raw: string): void {
     if (raw.startsWith("ping")) return; // pipecat's own keepalive, not JSON
     let msg: RtviMessage;
@@ -143,11 +126,8 @@ export class VoiceSession {
       return;
     }
     if (msg.label !== "rtvi-ai" || !msg.data?.text) return;
-
-    if (msg.type === "bot-transcription") {
-      this.handlers.onTranscript("interviewer", msg.data.text);
-    } else if (msg.type === "user-transcription" && msg.data.final) {
-      this.handlers.onTranscript("you", msg.data.text);
+    if (msg.type === "user-transcription" && msg.data.final) {
+      this.handlers.onTranscript(msg.data.text);
     }
   }
 }
