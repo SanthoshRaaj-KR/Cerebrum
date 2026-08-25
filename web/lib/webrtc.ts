@@ -7,6 +7,10 @@ export type MicHandlers = {
   onError: (message: string) => void;
   /** A finalised chunk of speech, to be appended to the answer box. */
   onTranscript: (text: string) => void;
+  /** The in-progress guess at the current sentence. Deepgram revises this
+   * as you speak, so it replaces rather than appends - it exists so the
+   * UI can show something is happening before you pause. */
+  onInterim: (text: string) => void;
 };
 
 // Pipecat's RTVI message shapes (pipecat.processors.frameworks.rtvi.models),
@@ -43,9 +47,25 @@ export class MicSession {
   async start(): Promise<void> {
     this.handlers.onStatusChange("connecting");
 
+    // getUserMedia does not reject while a permission prompt is sitting
+    // unanswered - it simply never settles. Without a deadline the UI stays
+    // on "connecting" forever and looks broken, which is indistinguishable
+    // from a real fault. Time it out and say what to actually do.
     let micStream: MediaStream;
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await withTimeout(
+        navigator.mediaDevices.getUserMedia({ audio: true }),
+        MIC_PERMISSION_TIMEOUT_MS
+      );
+      if (stream === TIMED_OUT) {
+        this.handlers.onStatusChange("failed");
+        this.handlers.onError(
+          "Still waiting on microphone permission. Look for your browser's " +
+            "mic prompt and choose Allow, then try again - or just type your answer."
+        );
+        return;
+      }
+      micStream = stream;
     } catch {
       this.handlers.onStatusChange("failed");
       this.handlers.onError(
@@ -126,21 +146,66 @@ export class MicSession {
       return;
     }
     if (msg.label !== "rtvi-ai" || !msg.data?.text) return;
-    if (msg.type === "user-transcription" && msg.data.final) {
+    if (msg.type !== "user-transcription") return;
+    // Deepgram emits several interim guesses per sentence and then exactly
+    // one final. Only the final is committed, or the answer box would fill
+    // up with half-sentences.
+    if (msg.data.final) {
+      this.handlers.onInterim("");
       this.handlers.onTranscript(msg.data.text);
+    } else {
+      this.handlers.onInterim(msg.data.text);
     }
   }
 }
 
+/** How long to wait for ICE gathering before sending the offer anyway. */
+const ICE_GATHERING_TIMEOUT_MS = 2000;
+
+/** How long to sit on an unanswered microphone permission prompt. */
+const MIC_PERMISSION_TIMEOUT_MS = 12000;
+
+const TIMED_OUT = Symbol("timed-out");
+
+/** Resolves to TIMED_OUT rather than hanging if `promise` never settles. */
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number
+): Promise<T | typeof TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<typeof TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), ms);
+  });
+  try {
+    return await Promise.race([promise, deadline]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
+
+/**
+ * Resolves when ICE gathering finishes, or after a short deadline.
+ *
+ * The deadline matters: gathering can stall indefinitely (a browser waiting
+ * on an unreachable STUN server, a headless or locked-down environment with
+ * no usable interfaces), and without it the offer is never sent at all - the
+ * UI just sits on "connecting" forever with nothing in the server log to
+ * explain it. Host candidates are gathered first and are the only ones that
+ * matter for a same-machine connection, so proceeding with a partial list
+ * costs nothing here.
+ */
 async function waitForIceGatheringComplete(pc: RTCPeerConnection): Promise<void> {
   if (pc.iceGatheringState === "complete") return;
   await new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      pc.removeEventListener("icegatheringstatechange", check);
+      resolve();
+    };
     function check() {
-      if (pc.iceGatheringState === "complete") {
-        pc.removeEventListener("icegatheringstatechange", check);
-        resolve();
-      }
+      if (pc.iceGatheringState === "complete") done();
     }
+    const timer = setTimeout(done, ICE_GATHERING_TIMEOUT_MS);
     pc.addEventListener("icegatheringstatechange", check);
   });
 }

@@ -36,6 +36,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const [micStatus, setMicStatus] = useState<MicStatus>("idle");
+  const [interim, setInterim] = useState("");
   const micRef = useRef<MicSession | null>(null);
 
   useEffect(() => {
@@ -126,6 +127,7 @@ export default function Home() {
   function stopMic() {
     micRef.current?.stop();
     micRef.current = null;
+    setInterim("");
   }
 
   function toggleMic() {
@@ -141,6 +143,7 @@ export default function Home() {
       // than replace - otherwise a long answer keeps overwriting itself.
       onTranscript: (text) =>
         setAnswer((prev) => (prev ? `${prev.trimEnd()} ${text}` : text)),
+      onInterim: setInterim,
     });
     micRef.current = mic;
     mic.start();
@@ -384,6 +387,11 @@ export default function Home() {
                 if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(false);
               }}
             />
+            {micLive && (
+              <p className={styles.interim}>
+                {interim || "listening..."}
+              </p>
+            )}
             <div className={styles.composerBar}>
               <button
                 className={`${styles.mic} ${micLive ? styles.micLive : ""}`}

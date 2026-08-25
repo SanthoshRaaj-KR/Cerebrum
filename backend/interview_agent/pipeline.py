@@ -73,8 +73,8 @@ async def start_dictation(connection: SmallWebRTCConnection, session=None) -> No
 
     transport = SmallWebRTCTransport(
         webrtc_connection=connection,
-        # Audio in only. Nothing is spoken back, so there is no output
-        # stream to negotiate.
+        # audio_out stays off - nothing is spoken back, so there is no
+        # outbound audio stream to negotiate.
         params=TransportParams(audio_in_enabled=True, audio_out_enabled=False),
     )
 
@@ -83,6 +83,15 @@ async def start_dictation(connection: SmallWebRTCConnection, session=None) -> No
             transport.input(),
             VADProcessor(vad_analyzer=SileroVADAnalyzer()),
             stt,
+            # transport.output() is required even with audio_out_enabled=False.
+            # It is not only an audio sink: the RTVI processor reports
+            # transcriptions by pushing OutputTransportMessageUrgentFrames
+            # downstream, and the OUTPUT transport is the only thing that
+            # turns those into data channel messages. Without it, audio still
+            # flows in and Deepgram still transcribes, but every result is
+            # dropped at the end of the pipeline and the browser hears
+            # nothing back.
+            transport.output(),
         ]
     )
 

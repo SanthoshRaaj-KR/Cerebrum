@@ -383,6 +383,17 @@
   gap: 0.5rem;
 }
 
+/* The in-progress transcript, so it's obvious the mic is working before
+   Deepgram finalises the sentence. */
+.interim {
+  font-size: 0.875rem;
+  color: var(--accent);
+  opacity: 0.75;
+  font-style: italic;
+  min-height: 1.2em;
+  padding-left: 0.125rem;
+}
+
 .spacer {
   flex: 1;
 }
