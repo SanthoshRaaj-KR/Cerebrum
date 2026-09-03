@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Interview Agent",
-  description: "Voice-based mock interview practice",
+  title: "Threshold",
+  description: "A researched, timed mock interview calibrated for freshers",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -1,4 +1,4 @@
-# Interview Agent runtime config. Everything tunable by ear lives here, not
+# Threshold runtime config. Everything tunable by ear lives here, not
 # in code. Secrets (API keys) live in .env instead - see .env.example.
 
 candidate:

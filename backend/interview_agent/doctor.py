@@ -354,7 +354,7 @@ def _run(check) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    print("\nInterview Agent - checking your setup")
+    print("\nThreshold - checking your setup")
     print("=" * 62)
 
     for check in (

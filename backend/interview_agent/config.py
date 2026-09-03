@@ -123,7 +123,7 @@ def load_settings() -> Settings:
     missing = [k for k in _REQUIRED if not os.environ.get(k)]
     if missing:
         print(
-            "\nInterview Agent cannot start - missing environment variables:\n"
+            "\nThreshold cannot start - missing environment variables:\n"
             + "".join(f"  {k}\n" for k in missing)
             + "\nCopy .env.example to .env and fill it in.\n",
             file=sys.stderr,
@@ -148,7 +148,7 @@ def load_settings() -> Settings:
         )
         other = "openai" if settings.llm_provider == "cerebras" else "cerebras"
         print(
-            f"\nInterview Agent cannot start - config.yaml sets"
+            f"\nThreshold cannot start - config.yaml sets"
             f" interviewer.provider to {settings.llm_provider}, but {needed} is"
             f" not in .env.\nEither add the key, or switch the provider to"
             f" {other}.\n",
@@ -158,7 +158,7 @@ def load_settings() -> Settings:
 
     if settings.tts_provider == "cartesia" and not settings.cartesia_api_key:
         print(
-            "\nInterview Agent cannot start - config.yaml sets"
+            "\nThreshold cannot start - config.yaml sets"
             " voice.tts.provider to cartesia, but CARTESIA_API_KEY is not in"
             " .env.\nEither add the key, or set the provider back to deepgram"
             " (which needs no extra key).\n",
@@ -172,7 +172,7 @@ def load_settings() -> Settings:
         and not settings.tavily_api_key
     ):
         print(
-            "\nInterview Agent cannot start - config.yaml has research.enabled"
+            "\nThreshold cannot start - config.yaml has research.enabled"
             " true with research.provider tavily, but TAVILY_API_KEY is not"
             " in .env.\nEither add the key, or set research.enabled to false"
             " (the interview still runs, just without live research"

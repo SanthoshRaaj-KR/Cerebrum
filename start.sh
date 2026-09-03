@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Start Interview Agent from Git Bash / WSL-style shells.
+# Start Threshold from Git Bash / WSL-style shells.
 #
 #     ./start.sh              bridge + web console, opens the browser
 #     ./start.sh --check      verify keys, then exit
