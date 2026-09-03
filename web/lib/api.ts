@@ -7,59 +7,69 @@ export type Mode = {
   key: string;
   name: string;
   blurb: string;
-  /** The three rubric dimensions every answer in this mode is scored on. */
+  /** Shown on the setup card as a preview of what this mode is about - not
+   * a live rubric any more. Nothing is scored until the report. */
   dims: string[];
-  count: number;
 };
 
 export type SystemInfo = {
   model: string;
   fresher: boolean;
-  questionsPerSession: number;
+  durationMinutes: number;
   modes: Mode[];
 };
 
-export type DimScore = { name: string; score: number };
-
-export type Grade = {
-  score: number;
-  verdict: string;
-  strength: string;
-  gap: string;
-  /** What the question was actually about - the interviewer deviates from
-   * the plan, so this is the honest sidebar label. */
-  topic: string;
-  rubric: DimScore[];
-};
-
 export type Turn = {
-  index: number;
-  short: string;
   question: string;
-  hint: string;
   answer: string | null;
   skipped: boolean;
-  grade: Grade | null;
 };
 
-export type PlanSlot = { num: number; short: string; score: number | null };
+export type Clock = {
+  startedAt: number;
+  durationSeconds: number;
+  elapsedSeconds: number;
+  remainingSeconds: number;
+  phase: "opening" | "core" | "depth" | "closing";
+  expired: boolean;
+};
+
+export type ResearchBrief = {
+  grounded: boolean;
+  competencies: string[];
+  realQuestions: string[];
+  sources: string[];
+};
 
 export type SessionState = {
-  mode: { key: string; name: string; dims: string[] };
+  mode: { key: string; name: string };
   role: string;
   level: string;
-  index: number;
-  total: number;
   finished: boolean;
-  plan: PlanSlot[];
+  clock: Clock | null;
   turns: Turn[];
-  average: number | null;
-  dimensionAverages: { name: string; score: number | null }[];
+  researchBrief: ResearchBrief | null;
 };
 
-export type Report = { headline: string; notes: string[] };
+export type CompetencyResult = {
+  name: string;
+  status: "solid" | "developing" | "not_shown" | "not_covered";
+  evidence: string;
+};
 
-export type SessionReport = SessionState & { report: Report };
+export type Scorecard = {
+  verdict: "strong_yes" | "yes" | "borderline" | "not_yet";
+  score: number;
+  headline: string;
+  strengths: string[];
+  gaps: string[];
+  notes: string[];
+  competencies: CompetencyResult[];
+  sources: string[];
+  grounded: boolean;
+};
+
+export type SessionReport = SessionState & { scorecard: Scorecard };
 
 async function asJson<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => ({}));
@@ -90,6 +100,9 @@ export async function startSession(body: {
   role: string;
   level: string;
   resume: string;
+  /** Overrides interview.duration_minutes for this session. The console
+   * never sends this - it's for the quality-check harness. */
+  minutes?: number;
 }): Promise<SessionState> {
   return asJson(
     await fetch(`${BRIDGE_URL}/api/session/start`, {
@@ -117,7 +130,8 @@ export async function getSession(): Promise<{ session: SessionState | null }> {
   return asJson(await fetch(`${BRIDGE_URL}/api/session`));
 }
 
-/** Ends the interview and returns the state plus the coach's notes. */
+/** Ends the interview and returns the state plus the scorecard - the first
+ * and only point anything evaluative reaches the candidate. */
 export async function getReport(): Promise<SessionReport> {
   return asJson(
     await fetch(`${BRIDGE_URL}/api/session/report`, { method: "POST" })
