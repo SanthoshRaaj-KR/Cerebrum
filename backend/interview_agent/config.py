@@ -29,6 +29,7 @@ class Settings:
     openai_api_key: str = ""
     cerebras_api_key: str = ""
     cartesia_api_key: str = ""
+    tavily_api_key: str = ""
     raw: dict[str, Any] = field(default_factory=dict)
 
     # -- config.yaml sections -------------------------------------------------
@@ -47,6 +48,14 @@ class Settings:
     @property
     def voice(self) -> dict[str, Any]:
         return self._section("voice")
+
+    @property
+    def interview(self) -> dict[str, Any]:
+        return self._section("interview")
+
+    @property
+    def research(self) -> dict[str, Any]:
+        return self._section("research")
 
     @property
     def fresher(self) -> bool:
@@ -79,10 +88,27 @@ class Settings:
         return list(self.interviewer.get("modes", []))
 
     @property
-    def questions_per_session(self) -> int:
-        # Below 3 there's no interview to speak of; above 12 the plan and
-        # the history stop fitting comfortably in one session.
-        return max(3, min(12, int(self.interviewer.get("questions_per_session", 6))))
+    def duration_minutes(self) -> int:
+        # Below 10 there's barely an interview; above 90 nothing here is
+        # tuned for it (history window, research brief size). Overridable
+        # per session via the start payload - see bridge.start_session.
+        return max(10, min(90, int(self.interview.get("duration_minutes", 40))))
+
+    @property
+    def research_enabled(self) -> bool:
+        return bool(self.research.get("enabled", True))
+
+    @property
+    def research_provider(self) -> str:
+        return str(self.research.get("provider", "tavily")).lower()
+
+    @property
+    def research_cache_days(self) -> int:
+        return max(0, int(self.research.get("cache_days", 14)))
+
+    @property
+    def research_max_results(self) -> int:
+        return max(1, min(10, int(self.research.get("max_results", 5))))
 
     @property
     def tts_provider(self) -> str:
@@ -112,6 +138,7 @@ def load_settings() -> Settings:
         openai_api_key=os.environ.get("OPENAI_API_KEY", "").strip(),
         cerebras_api_key=os.environ.get("CEREBRAS_API_KEY", "").strip(),
         cartesia_api_key=os.environ.get("CARTESIA_API_KEY", "").strip(),
+        tavily_api_key=os.environ.get("TAVILY_API_KEY", "").strip(),
         raw=raw,
     )
 
@@ -135,6 +162,21 @@ def load_settings() -> Settings:
             " voice.tts.provider to cartesia, but CARTESIA_API_KEY is not in"
             " .env.\nEither add the key, or set the provider back to deepgram"
             " (which needs no extra key).\n",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    if (
+        settings.research_enabled
+        and settings.research_provider == "tavily"
+        and not settings.tavily_api_key
+    ):
+        print(
+            "\nInterview Agent cannot start - config.yaml has research.enabled"
+            " true with research.provider tavily, but TAVILY_API_KEY is not"
+            " in .env.\nEither add the key, or set research.enabled to false"
+            " (the interview still runs, just without live research"
+            " grounding).\n",
             file=sys.stderr,
         )
         raise SystemExit(1)

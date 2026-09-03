@@ -2,9 +2,10 @@
 
     python -m interview_agent.doctor
 
-Validates the three API keys (Cerebras, Deepgram, Cartesia) against the
-real services, so a bad key surfaces here rather than as a dead mic or a
-silent interviewer mid-session.
+Validates the API keys (the LLM provider, Deepgram, Cartesia, Tavily)
+against the real services, so a bad key surfaces here rather than as a
+dead mic, a silent interviewer, or an ungrounded set of questions
+mid-session.
 """
 
 from __future__ import annotations
@@ -256,6 +257,53 @@ def _default_voice_id() -> str:
     return configured or "a0e99841-438c-4a64-b679-ae501e7d6091"
 
 
+def check_tavily() -> None:
+    """Only matters if research.enabled selects tavily - checked the same
+    way as everything else here: prove the key actually runs a search,
+    not just that it parses."""
+    if not settings.research_enabled:
+        print("\nTavily (role research)")
+        print(f"{WARN} research.enabled is false in config.yaml - skipped")
+        return
+    if settings.research_provider != "tavily":
+        print("\nTavily (role research)")
+        print(f"{WARN} research.provider is {settings.research_provider!r}, not tavily - skipped")
+        return
+
+    print("\nTavily (role research)")
+    if not settings.tavily_api_key:
+        print(f"{BAD} TAVILY_API_KEY not set")
+        _fail("TAVILY_API_KEY missing")
+        return
+
+    try:
+        r = httpx.post(
+            "https://api.tavily.com/search",
+            json={
+                "api_key": settings.tavily_api_key,
+                "query": "backend engineer fresher interview questions",
+                "search_depth": "basic",
+                "max_results": 1,
+            },
+            timeout=20.0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"{BAD} could not reach Tavily: {exc}")
+        _fail("Tavily unreachable")
+        return
+
+    if r.status_code == 200:
+        print(f"{OK} key valid, search working")
+    elif r.status_code in (401, 403):
+        print(f"{BAD} key rejected. Make a new one at tavily.com")
+        _fail("TAVILY_API_KEY invalid")
+    elif r.status_code == 429:
+        print(f"{BAD} rate limited or out of search credits - check usage at app.tavily.com")
+        _fail("Tavily rate limited or out of credit")
+    else:
+        print(f"{WARN} unexpected response searching {r.status_code}: {r.text[:120]}")
+
+
 def check_web() -> None:
     print("\nWeb console (web/)")
     if shutil.which("node") is None or shutil.which("npm") is None:
@@ -279,16 +327,15 @@ def check_web() -> None:
 
 def check_roles_and_modes() -> None:
     print("\nInterview surface (config.yaml)")
-    if not settings.roles:
-        print(f"{BAD} no roles configured under interviewer.roles")
-        _fail("no roles configured")
-    else:
-        print(f"{OK} {len(settings.roles)} role(s): {', '.join(settings.roles)}")
+    # There's no configured role list any more - the candidate types their
+    # own target role, and it's what drives research.py. Only the mode list
+    # is actually fixed configuration worth checking here.
     if not settings.modes:
         print(f"{BAD} no modes configured under interviewer.modes")
         _fail("no modes configured")
     else:
         print(f"{OK} {len(settings.modes)} mode(s): {', '.join(settings.modes)}")
+    print(f"{OK} interview length: {settings.duration_minutes} minutes")
 
 
 def _run(check) -> None:
@@ -314,6 +361,7 @@ def main(argv: list[str] | None = None) -> int:
         check_llm,
         check_deepgram,
         check_tts,
+        check_tavily,
         check_web,
         check_roles_and_modes,
     ):

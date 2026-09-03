@@ -1,6 +1,6 @@
 """What the interviewer knows about who it's talking to.
 
-Its own module so both prompts/ and planner.py can take it without either
+Its own module so both prompts/ and research.py can take it without either
 importing the interview session that owns it.
 """
 

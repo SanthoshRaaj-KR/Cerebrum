@@ -20,10 +20,11 @@ interviewer:
   # How many prior turns (question+answer pairs, not messages) stay in the
   # LLM context. Too small and cross-questioning loses the thread; too large
   # and the model spends its window rereading a whole interview each turn.
-  remember_turns: 20
-  # How many questions a session runs before the report. The plan is built
-  # to this length, and it's what "Q3 of 6" counts against.
-  questions_per_session: 6
+  # A 40-minute interview runs more turns than a 6-question one used to, so
+  # this is higher than it was - the coverage ledger in notes.py is what
+  # actually carries the early interview forward once turns fall out of
+  # this window.
+  remember_turns: 30
   # Modes selectable in the UI, in the order the cards appear. Each needs a
   # matching module in backend/interview_agent/prompts/ registered in that
   # package's __init__. There is no separate role list any more - the mode
@@ -36,6 +37,30 @@ interviewer:
     - system_design_hld
     - system_design_lld
     - ai_engineer
+
+interview:
+  # There's no question count any more - the interview runs on a clock,
+  # like a real one. It opens easy, spends most of the middle on
+  # substance, pushes hardest near the end, then wraps up because time is
+  # gone. Overridable per session (tools/quality_check.py uses this so a
+  # scripted run doesn't take 40 real minutes).
+  duration_minutes: 40
+
+research:
+  # Before the interview starts, the candidate's target role is researched
+  # so the questions are grounded in what companies actually ask a fresher
+  # for that role, not just the model's own idea of it. Set to false to
+  # skip this and fall back to the model's own knowledge - the interview
+  # still runs, just less current.
+  enabled: true
+  # Only tavily is wired up right now.
+  provider: tavily
+  # A second session on the same role/level/mode reuses the cached brief
+  # instead of paying for the search and the distillation call again.
+  cache_days: 14
+  # Results kept per search query, before the distillation call folds them
+  # into the role brief.
+  max_results: 5
 
 voice:
   stt:

@@ -15,8 +15,8 @@ services:
     ports:
       - "127.0.0.1:7332:7332"
     volumes:
-      # Behavior lives in config.yaml, so editing a mode or the question
-      # count is a container restart, not a rebuild.
+      # Behavior lives in config.yaml, so editing a mode or the interview
+      # length is a container restart, not a rebuild.
       - ./config.yaml:/app/config.yaml:ro
       # Source mounted so a backend edit is a restart, not a rebuild. The
       # image already contains this; the mount just keeps it current.

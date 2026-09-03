@@ -60,6 +60,7 @@ if (-not (Test-Path $envFile)) {
     Say "Created .env from the template. Put your keys in it, then run again:" Yellow
     Say "  CEREBRAS_API_KEY   cloud.cerebras.ai"
     Say "  DEEPGRAM_API_KEY   console.deepgram.com"
+    Say "  TAVILY_API_KEY     tavily.com"
     Say "  CARTESIA_API_KEY   play.cartesia.ai"
     Say ""
     exit 1
