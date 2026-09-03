@@ -1,9 +1,10 @@
 """Run scripted interviews against a running backend and print transcripts.
 
-    python tools/quality_check.py live            # sit the interview yourself
-    python tools/quality_check.py                 # realistic mixed answers
-    python tools/quality_check.py hostile         # wrong claims, does it push back?
-    python tools/quality_check.py modes           # plan + opener for every mode
+    python tools/quality_check.py live               # sit the interview yourself
+    python tools/quality_check.py                    # realistic mixed answers
+    python tools/quality_check.py hostile            # wrong claims, does it push back?
+    python tools/quality_check.py modes              # research brief + opener for every mode
+    python tools/quality_check.py hostile --minutes 5
 
 Interview quality lives almost entirely in prompt wording, which means it
 regresses silently - a change that reads like an improvement can quietly
@@ -14,19 +15,27 @@ any prompt change.
 The `hostile` scenario is the important one. Every answer contains a claim
 a real interviewer would stop on (plaintext passwords, "POST is more
 secure than GET", "indexes slow down the database"). If the transcript
-shows the interviewer moving politely to its next planned question, the
-reactive logic in interviewer.py has broken.
+shows the interviewer moving politely to its next question, the reactive
+logic in interviewer.py has broken.
+
+`--minutes` overrides interview.duration_minutes for the session (default
+below) - the clock is wall-clock based, so a scripted run needs a short
+budget or it'll sit there for 40 real minutes waiting on itself.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
 
 BASE = os.environ.get("INTERVIEW_AGENT_URL", "http://localhost:7332")
+
+DEFAULT_TEST_MINUTES = 3
+MAX_TEST_TURNS = 14
 
 RESUME = """Santhosh Raaj K R - B.Tech Computer Science, 2025
 
@@ -41,8 +50,8 @@ Python, FastAPI, React, PostgreSQL, Docker, Git, LangChain
 """
 
 # Strong, thin, an honest "I don't know", a skip, a confident error, then
-# strong again - enough range to see whether grading discriminates and
-# whether the interviewer adapts to each.
+# strong again - enough range to see whether the interviewer discriminates
+# and adapts to each, now that nothing is scored until the very end.
 REALISTIC = [
     "Friday AI is a personal assistant I built. The backend is FastAPI and it "
     "talks to a Next.js console over a WebSocket so the assistant can push "
@@ -60,6 +69,11 @@ REALISTIC = [
     "tricky part is invalidation - if the row changes before the TTL expires "
     "you serve stale data, so for anything the user just edited I'd write "
     "through or delete the key on write rather than waiting for expiry.",
+    "For rate limiting I'd use a token bucket at the gateway - refill at a "
+    "fixed rate, reject once it's empty.",
+    "I'd paginate with a cursor rather than offset, because offset re-scans "
+    "everything before the page on every request and rows shifting under you "
+    "gives duplicates or gaps.",
 ]
 
 # Every one of these should be challenged by name.
@@ -76,6 +90,12 @@ HOSTILE = [
     "over-engineering.",
 ]
 
+# Any of these appearing in a question the interviewer asks is a scoring
+# leak - nothing evaluative should reach the candidate until the report.
+_LEAK_PATTERN = re.compile(
+    r"\b\d+(\.\d+)?\s*/\s*10\b|\bmissing\s*:|\bscore\s*:|\bverdict\s*:", re.IGNORECASE
+)
+
 
 def post(path: str, payload: dict | None = None) -> dict:
     req = urllib.request.Request(
@@ -87,45 +107,84 @@ def post(path: str, payload: dict | None = None) -> dict:
         return json.loads(r.read())
 
 
-def run(mode: str, answers: list[str], label: str, resume: str = RESUME) -> None:
+def post_get(path: str) -> dict:
+    with urllib.request.urlopen(BASE + path, timeout=60) as r:
+        return json.loads(r.read())
+
+
+def _check_leak(question: str) -> None:
+    if _LEAK_PATTERN.search(question):
+        print(f"    !! POSSIBLE SCORE LEAK in question text: {question[:200]}")
+
+
+def run(
+    mode: str,
+    answers: list[str],
+    label: str,
+    resume: str = RESUME,
+    minutes: int = DEFAULT_TEST_MINUTES,
+) -> dict:
     post("/api/session/reset")
     print("=" * 76)
-    print(f"{label}   [{mode}]")
+    print(f"{label}   [{mode}]  ({minutes} min budget)")
     print("=" * 76)
 
     st = post(
         "/api/session/start",
-        {"mode": mode, "role": "Backend Engineer", "level": "Fresher", "resume": resume},
+        {
+            "mode": mode,
+            "role": "Backend Engineer",
+            "level": "Fresher",
+            "resume": resume,
+            "minutes": minutes,
+        },
     )
-    print("PLAN:", " -> ".join(p["short"] for p in st["plan"]), "\n")
+    brief = st.get("researchBrief") or {}
+    print(
+        f"research: grounded={brief.get('grounded')}  "
+        f"competencies={', '.join(brief.get('competencies', [])) or '(none)'}"
+    )
+    print(f"sources : {len(brief.get('sources', []))}\n")
 
-    for i in range(st["total"]):
-        turn = st["turns"][i]
-        ans = answers[i] if i < len(answers) else ""
+    i = 0
+    while not st["finished"] and i < MAX_TEST_TURNS:
+        turn = st["turns"][-1]
+        _check_leak(turn["question"])
+        ans = answers[i] if i < len(answers) else "I'm not totally sure - could you clarify what you're after?"
         skipped = not ans
 
-        print(f"Q{i + 1}  {turn['question']}")
-        print(f"    A: {'(skipped)' if skipped else ans[:180]}")
+        print(f"[{st['clock']['phase']}] Q{i + 1}  {turn['question']}")
+        print(f"    A: {'(skipped)' if skipped else ans[:180]}\n")
 
         st = post("/api/session/answer", {"text": ans, "skipped": skipped})
-        g = st["turns"][i]["grade"]
-        dims = "  ".join(f"{r['name']} {r['score']}" for r in g["rubric"])
-        print(f"    {g['score']}/10  {g['verdict']}   [{dims}]")
-        print(f"    worked : {g['strength']}")
-        print(f"    missing: {g['gap']}\n")
-        if st["finished"]:
-            break
+        i += 1
+
+    if i >= MAX_TEST_TURNS and not st["finished"]:
+        print(f"!! hit MAX_TEST_TURNS ({MAX_TEST_TURNS}) without the clock ending the interview\n")
 
     rep = post("/api/session/report")
-    print(f"AVERAGE {rep['average']}   {rep['report']['headline']}")
-    for n in rep["report"]["notes"]:
-        print("  -", n)
+    sc = rep["scorecard"]
+    print(f"VERDICT {sc['verdict']}   SCORE {sc['score']}/10")
+    print(f"  {sc['headline']}\n")
+    for c in sc["competencies"]:
+        print(f"    {c['status']:13} {c['name']}")
+    if sc["strengths"]:
+        print("\n  strengths:")
+        for s in sc["strengths"]:
+            print("   -", s)
+    if sc["gaps"]:
+        print("  gaps:")
+        for g in sc["gaps"]:
+            print("   -", g)
     print()
+    return rep
 
 
-def survey() -> None:
-    """Plan and opening question for every mode, to check they're actually
-    different interviews rather than one wearing different hats."""
+def survey(minutes: int = DEFAULT_TEST_MINUTES) -> None:
+    """Research brief and opening question for every mode, to check they're
+    actually different interviews rather than one wearing different hats,
+    and that the opener is improvised rather than lifted verbatim from the
+    real questions research.py found."""
     modes = [m["key"] for m in post_get("/api/health")["system"]["modes"]]
     resume = (
         "B.Tech CS 2025. Built a RAG chatbot over PDFs with LangChain and "
@@ -135,31 +194,28 @@ def survey() -> None:
         post("/api/session/reset")
         st = post(
             "/api/session/start",
-            {"mode": m, "role": "Engineer", "level": "Fresher", "resume": resume},
+            {"mode": m, "role": "Backend Engineer", "level": "Fresher", "resume": resume, "minutes": minutes},
         )
+        brief = st.get("researchBrief") or {}
+        opener = st["turns"][0]["question"]
+        real_qs = {q.strip() for q in brief.get("realQuestions", [])}
+        scripted = opener.strip() in real_qs
+
         print(f"[{m}]")
-        print("  plan:", " | ".join(p["short"] for p in st["plan"]))
-        print("  Q1  :", st["turns"][0]["question"][:150], "\n")
-
-
-def post_get(path: str) -> dict:
-    with urllib.request.urlopen(BASE + path, timeout=60) as r:
-        return json.loads(r.read())
+        print(f"  grounded    : {brief.get('grounded')}")
+        print(f"  competencies: {', '.join(brief.get('competencies', []))}")
+        print(f"  sources     : {len(brief.get('sources', []))}")
+        print(f"  opener      : {opener[:150]}")
+        print(f"  scripted?   : {'YES - REGRESSION' if scripted else 'no (improvised, good)'}\n")
 
 
 def live() -> None:
-    """Sit the interview yourself from the terminal.
-
-    The web console isn't wired to this API yet, and reading scripted
-    transcripts is a poor substitute for being on the receiving end of a
-    follow-up you didn't expect.
-    """
+    """Sit the interview yourself from the terminal."""
     modes = post_get("/api/health")["system"]["modes"]
     print("\n  Modes\n")
     for i, m in enumerate(modes, 1):
         print(f"   {i}. {m['name']}")
-        print(f"      {m['blurb']}")
-        print(f"      graded on: {', '.join(m['dims'])}\n")
+        print(f"      {m['blurb']}\n")
 
     while True:
         raw = input(f"  Pick a mode [1-{len(modes)}]: ").strip()
@@ -169,6 +225,8 @@ def live() -> None:
 
     role = input("  Target role  [Backend Engineer]: ").strip() or "Backend Engineer"
     level = input("  Level        [Fresher]: ").strip() or "Fresher"
+    minutes_raw = input("  Minutes      [40]: ").strip()
+    minutes = int(minutes_raw) if minutes_raw.isdigit() else 40
     print("  Résumé - paste it, then a blank line (or just press enter to skip):")
     lines: list[str] = []
     while True:
@@ -178,22 +236,21 @@ def live() -> None:
         lines.append(line)
     resume = "\n".join(lines)
 
-    print("\n  Building the question plan...\n")
+    print(f"\n  Reading up on what {role} interviews actually cover...\n")
     post("/api/session/reset")
     st = post(
         "/api/session/start",
-        {"mode": mode["key"], "role": role, "level": level, "resume": resume},
+        {"mode": mode["key"], "role": role, "level": level, "resume": resume, "minutes": minutes},
     )
-    print("  Plan:", " -> ".join(p["short"] for p in st["plan"]), "\n")
 
     while not st["finished"]:
-        i = st["index"]
-        turn = st["turns"][i]
+        turn = st["turns"][-1]
+        clock = st["clock"]
+        mins_left = int(clock["remainingSeconds"] // 60)
+        secs_left = int(clock["remainingSeconds"] % 60)
         print("=" * 72)
-        print(f"  Q{i + 1} of {st['total']}\n")
+        print(f"  [{clock['phase']}]  {mins_left}:{secs_left:02d} left\n")
         print(f"  {turn['question']}\n")
-        if turn.get("hint"):
-            print(f"  (hint: {turn['hint']})\n")
         print("  Your answer - blank line to submit, or 'skip':")
 
         buf: list[str] = []
@@ -205,30 +262,42 @@ def live() -> None:
         text = "\n".join(buf).strip()
         skipped = not text or text.lower() == "skip"
 
-        print("\n  grading...\n")
+        print("\n  ...\n")
         st = post("/api/session/answer", {"text": "" if skipped else text, "skipped": skipped})
-        g = st["turns"][i]["grade"]
-        dims = "   ".join(f"{r['name']} {r['score']}" for r in g["rubric"])
-        print(f"  {g['score']}/10   {g['verdict']}")
-        print(f"  {dims}")
-        print(f"  worked : {g['strength']}")
-        print(f"  missing: {g['gap']}")
-        print(f"  running average: {st['average']}\n")
 
     rep = post("/api/session/report")
+    sc = rep["scorecard"]
     print("=" * 72)
-    print(f"\n  {rep['report']['headline']}")
-    print(f"  Average {rep['average']}/10")
-    for d in rep["dimensionAverages"]:
-        print(f"    {d['name']}: {d['score']}")
-    print()
-    for n in rep["report"]["notes"]:
-        print(f"  - {n}")
+    print(f"\n  {sc['headline']}")
+    print(f"  Verdict {sc['verdict']}   Score {sc['score']}/10\n")
+    for c in sc["competencies"]:
+        print(f"    {c['status']:13} {c['name']}")
+    print("\n  strengths:")
+    for s in sc["strengths"]:
+        print("   -", s)
+    print("  gaps:")
+    for g in sc["gaps"]:
+        print("   -", g)
+    print("  notes:")
+    for n in sc["notes"]:
+        print("   -", n)
     print()
 
 
 def main() -> int:
-    scenario = sys.argv[1] if len(sys.argv) > 1 else "realistic"
+    args = sys.argv[1:]
+    minutes = DEFAULT_TEST_MINUTES
+    if "--minutes" in args:
+        idx = args.index("--minutes")
+        try:
+            minutes = int(args[idx + 1])
+        except (IndexError, ValueError):
+            print("--minutes needs an integer argument", file=sys.stderr)
+            return 1
+        del args[idx : idx + 2]
+
+    scenario = args[0] if args else "realistic"
+
     try:
         post_get("/api/health")
     except (urllib.error.URLError, OSError) as exc:
@@ -250,11 +319,12 @@ def main() -> int:
             HOSTILE,
             "HOSTILE - every answer contains a claim that must be challenged",
             resume="B.Tech CS 2025. Built an e-commerce backend with Django and MongoDB.",
+            minutes=minutes,
         )
     elif scenario == "modes":
-        survey()
+        survey(minutes=minutes)
     else:
-        run("sde_backend", REALISTIC, "REALISTIC - mixed-quality answers")
+        run("sde_backend", REALISTIC, "REALISTIC - mixed-quality answers", minutes=minutes)
 
     post("/api/session/reset")
     return 0
