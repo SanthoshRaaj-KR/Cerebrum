@@ -354,7 +354,7 @@ def _run(check) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    print("\nThreshold - checking your setup")
+    print("\nCerebrum - checking your setup")
     print("=" * 62)
 
     for check in (

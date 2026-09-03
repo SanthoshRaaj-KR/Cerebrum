@@ -1,4 +1,4 @@
-# Threshold
+# Cerebrum
 
 A mock interviewer for entry-level candidates that actually behaves like
 one. Pick a mode, type your target role, and it runs a real 40-minute

@@ -2,7 +2,7 @@
 the browser as transcript messages over the WebRTC data channel.
 
 This used to be a full spoken interview - the model talked back through
-TTS. Threshold's design made the interview typed and graded, so the
+TTS. Cerebrum's design made the interview typed and graded, so the
 microphone's job shrank to one thing: let someone speak an answer instead
 of typing it. No LLM and no TTS in this path; the transcript lands in the
 textarea and the normal typed flow takes over from there.

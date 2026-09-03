@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI):
     await _webrtc_handler.close()
 
 
-app = FastAPI(title="Threshold bridge", lifespan=lifespan)
+app = FastAPI(title="Cerebrum bridge", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     # The web console runs on its own port; both are local.
@@ -246,7 +246,7 @@ def main() -> None:
     )
 
     info = system_info()
-    print(f"\n  Threshold bridge on http://{HOST}:{PORT}")
+    print(f"\n  Cerebrum bridge on http://{HOST}:{PORT}")
     print(f"  model  {info['model']}   fresher  {str(info['fresher']).lower()}")
     print(f"  modes  {', '.join(m['name'] for m in info['modes'])}")
     print(f"  {info['durationMinutes']} minutes per session\n")

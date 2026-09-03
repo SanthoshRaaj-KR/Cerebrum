@@ -1,5 +1,5 @@
 <#
-    Start Threshold. One command, everything up.
+    Start Cerebrum. One command, everything up.
 
         .\start.ps1            bridge + web console, opens the browser
         .\start.ps1 -Check     verify keys, then exit
@@ -135,7 +135,7 @@ try {
     }
 
     Say ""
-    Say "Threshold is up. Ctrl-C to stop." Green
+    Say "Cerebrum is up. Ctrl-C to stop." Green
     Say ""
 
     while ($true) {

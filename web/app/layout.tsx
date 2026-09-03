@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Threshold",
+  title: "Cerebrum",
   description: "A researched, timed mock interview calibrated for freshers",
 };
 

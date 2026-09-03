@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Start Threshold from Git Bash / WSL-style shells.
+# Start Cerebrum from Git Bash / WSL-style shells.
 #
 #     ./start.sh              bridge + web console, opens the browser
 #     ./start.sh --check      verify keys, then exit
