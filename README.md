@@ -1,43 +1,55 @@
 # Interview Agent
 
-A voice-based mock interviewer for entry-level candidates. Pick a role and a
-mode, talk to it like a real interview, and it asks follow-up and
-cross-questions grounded in what you just said - not a random next question
-off a list.
+A mock interviewer for entry-level candidates that actually behaves like
+one. Pick a mode, type your target role, and it runs a real 40-minute
+interview: no fixed question list, no plan to fall back on. Before it
+starts, it looks up what your target role's fresher interviews actually
+cover and researches real questions companies have asked; from there it
+follows the clock and reacts to what you just said - challenging a wrong
+claim, digging into a thin answer, easing off an honest "I don't know",
+moving to new ground once it's satisfied - the way a person running the
+room would, not a quiz working down a list. Nothing is scored until the
+40 minutes are up: no score, no rubric, no hint of a verdict mid-interview,
+because no real interviewer grades you to your face.
 
 ```
-  you, on the mic
+  target role                researched before question one - real fresher
+      │                      interview questions + a competency map, from Tavily
+      ▼
+  the interview loop         one turn at a time, full history in context
+      │
+      ├── react to the last answer   challenge / redirect / dig / ease off / advance
+      ├── the clock                  opening → core → depth → closing, 40 min
+      └── the coverage ledger        which competencies still have nothing shown
       │
       ▼
-  the voice pipeline        one PipeCat pipeline per session, over WebRTC
-      │
-      ├── Deepgram            speech-to-text
-      ├── OpenAI / Cerebras   the interviewer's model - asks, follows up, cross-questions
-      └── Deepgram            text-to-speech (or Cartesia, if you switch it)
-      │
-      ▼
-  resume/projects            uploaded once, structured, grounds resume_projects mode
+  the scorecard               one call, once, at the end - calibrated to
+                               "would a company hire this fresher", not a
+                               senior bar
 ```
 
-Three roles (AI Engineer, Backend Engineer, Full Stack Developer) and three
-modes (Resume & Projects, Computer Fundamentals, System Design), all
-calibrated for a fresher candidate by default (`candidate.fresher` in
-`config.yaml`).
+Six modes (Résumé & Projects, SDE & Backend, Computer Fundamentals, System
+Design HLD/LLD, AI Engineer), all calibrated for a fresher candidate by
+default (`candidate.fresher` in `config.yaml`). There's no separate role
+list - you type your own target role and level, and that's what the
+research is grounded in.
 
 ## What it costs
 
-**Nothing to run beyond the three providers' usage.**
+**Nothing to run beyond the providers' usage.**
 
 | Piece | What | Cost |
 |---|---|---|
 | The interviewer | OpenAI (default) | Your existing credits - [platform.openai.com](https://platform.openai.com/api-keys) |
 | The interviewer (faster alternative) | Cerebras | Set `interviewer.provider: cerebras` - [cloud.cerebras.ai](https://cloud.cerebras.ai) |
+| Role research (real fresher questions + competencies) | Tavily | Free tier available - [tavily.com](https://tavily.com) |
 | Speech-to-text **and** text-to-speech | Deepgram | Free tier available - [console.deepgram.com](https://console.deepgram.com) |
 | Text-to-speech (optional alternative) | Cartesia | Only if you switch `voice.tts.provider` - [play.cartesia.ai](https://play.cartesia.ai) |
 
-**Two keys, not four.** Deepgram does both STT and TTS off one key, and the
-LLM needs only whichever provider you select. Both swaps are one line in
-`config.yaml`.
+**Three keys, not five.** Deepgram does both STT and TTS off one key, and
+the LLM needs only whichever provider you select. All swaps are one line
+in `config.yaml`; set `research.enabled: false` there to skip Tavily
+entirely and fall back to the model's own knowledge of the role.
 
 ## Setup
 
@@ -53,7 +65,7 @@ That's it — console on **http://localhost:3000**, backend on
 removes the containers.
 
 `config.yaml` and the source are bind-mounted, so changing a mode, the
-question count or any backend code is a `docker compose restart`, not a
+interview length or any backend code is a `docker compose restart`, not a
 rebuild. Only a dependency change needs `docker compose build`.
 
 One limitation: **the microphone doesn't work in Docker.** The typed
@@ -94,7 +106,7 @@ is the default execution policy; `./start.sh` already passes
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
-Two keys go in `.env` - see `.env.example`:
+Three keys go in `.env` - see `.env.example`:
 
 - **The LLM key** for whichever `interviewer.provider` you selected:
   `OPENAI_API_KEY` (the default) or `CEREBRAS_API_KEY`. Either way,
@@ -104,6 +116,11 @@ Two keys go in `.env` - see `.env.example`:
 - **Deepgram** - [console.deepgram.com](https://console.deepgram.com) →
   create an API key. Used for both hearing your answers and speaking the
   questions.
+- **Tavily** - [tavily.com](https://tavily.com) → create an API key. Used
+  to research the candidate's target role before the interview starts.
+  Required unless `research.enabled` is set to `false` in `config.yaml`,
+  in which case the interview still runs, just grounded in the model's own
+  knowledge of the role instead of a live search.
 
 The other two keys are optional: the LLM provider you *didn't* pick, and
 `CARTESIA_API_KEY` (only read when `voice.tts.provider` is `cartesia`).
@@ -111,7 +128,7 @@ Leaving them blank is fine - startup only demands the ones your config
 actually uses, and names the missing one if you switch providers without
 adding its key.
 
-Check all three before relying on them:
+Check all of them before relying on them:
 
 ```powershell
 .\start.ps1 -Check
@@ -121,15 +138,20 @@ Check all three before relying on them:
 
 `.\start.ps1` puts it on **http://localhost:3000**. Two processes: the
 bridge (`interview_agent.bridge`, on 127.0.0.1:7332) holds the resume
-profile, the interview session state, and the PipeCat voice pipeline; the
-web console is a window onto it over REST + WebRTC.
+profile, the interview session state, and the mic's dictation pipeline;
+the web console (`web/app/page.tsx`) is a single page that walks through
+setup → interview → report, talking to the bridge over REST and to the
+mic over WebRTC.
 
-- **`/`** - upload a resume PDF, see it parsed into a structured profile
-  (education, skills, projects, experience).
-- **`/voice`** - the actual interview: pick a role and mode, start, and talk.
-  Live transcript, mute toggle, resume status shown before you start.
-- **`/interview`** - a text-only harness kept around for debugging the
-  interview logic without audio in the loop.
+- **Setup** - pick a mode, type your target role and level, paste or
+  upload a résumé (optional - the questions get a lot more specific with
+  one).
+- **Interview** - the actual thing: a countdown clock, the competencies
+  research turned up, and the conversation itself. Type an answer or
+  dictate it; nothing is scored here.
+- **Report** - the scorecard once the clock runs out or you end it early:
+  verdict, per-competency status, strengths, gaps, coach notes, the
+  sources it researched from, and the full transcript.
 
 Nothing here is authenticated - the bridge binds to `127.0.0.1` only, same
 posture as a single-user local tool with nothing to expose beyond this
@@ -137,44 +159,75 @@ machine.
 
 ## How the interview logic works
 
-`backend/interview_agent/interviewer.py` composes one system prompt per
-session from four pieces: a fixed set of interviewer-behavior rules (ask one
-question at a time, cross-question the last answer before moving on, no
-live grading, stay in character), the selected role's focus
-(`prompts/ai_engineer.py` etc.), the selected mode's focus
-(`prompts/system_design.py` etc. - `resume_projects` also injects the
-parsed resume), and a fresher/experienced calibration note.
+There's no question plan. `backend/interview_agent/research.py` runs
+before the first question - two or three Tavily searches for the
+candidate's target role, distilled into a `RoleBrief`: a competency map
+(each with a `fresher_bar` - what counts as *having* it at entry level,
+not at a senior level) and real questions found for calibration, framed
+explicitly as "don't read these out, don't work through them in order."
+
+From there, `interviewer.py` composes one system prompt per turn from: a
+fixed reactive ladder (challenge a wrong claim / redirect a dodge / dig
+into a thin answer / ease off an honest "I don't know" / only then advance
+to new ground), the mode's own focus (`prompts/sde_backend.py` etc.), the
+role brief, and two things that change every turn - `clock.py`'s phase
+guidance (opening → core → depth → closing, driven by elapsed wall time,
+not a turn count) and `notes.py`'s coverage ledger (which competencies
+still have nothing shown, so "advance" means picking real gaps, not the
+next line of a script).
 
 The cross-questioning behavior isn't a special feature - it's a prompting
-and full-history discipline. Every turn, the model sees the whole
-conversation so far and is explicitly instructed to dig into the
-candidate's last answer before moving to a new topic. The same composition
-is used whether the interview is running over the text harness
-(`interviewer.InterviewSession`, a plain message list) or the voice
-pipeline (`pipeline.py`, pipecat's `LLMContext` fed by the STT/TTS
-turn-taking machinery instead) - the transport differs, the interview logic
-doesn't.
+and full-history discipline. Every turn the model sees the whole
+conversation so far, plus a private read on how the last answer went
+(`notes.take()` - strong/thin/wrong/dodged/dont_know, never shown to the
+candidate) that decides which of the five options it should take. Nothing
+evaluative reaches the candidate until the interview ends: `scorecard.py`
+runs once, over the whole transcript, calibrated explicitly to "would a
+company hire this fresher" rather than a senior bar - naming a concept
+plus one worked example plus reasoning about a trade-off out loud is a
+solid 7-8, and an honest "I don't know" costs far less than a confidently
+wrong claim.
+
+The same composition is used whether the interview is running over the
+text-and-dictation console (`interviewer.InterviewSession`, a plain
+message list) or an internal call from `tools/quality_check.py` - the
+transport differs, the interview logic doesn't.
 
 Nothing persists across restarts: no database, no session log. The resume
-profile and the active interview session both live in the bridge process's
-memory and reset the moment it stops.
+profile, the active interview session, and the research cache under
+`.cache/` all live independently - the first two reset the moment the
+bridge process stops, the research cache survives it (14-day TTL, keyed
+per role/level/mode) so a second session on the same role doesn't pay for
+the search again.
 
 ## Status
 
-`.\start.ps1 -Check` passes fully green on the default (OpenAI + Deepgram)
-setup, and the whole text path is verified working end to end: a real
-resume PDF uploads and parses into structured projects/skills, the
-interviewer opens with a question grounded in one of those actual projects,
-and follow-ups reference what the candidate just said rather than jumping
-topic. The voice pipeline builds and both Deepgram websockets (STT and TTS)
-connect inside the running session.
+`.\start.ps1 -Check` passes fully green on the default (OpenAI + Deepgram
++ Tavily) setup. The full loop - research → clock-paced conversation →
+end-of-interview scorecard - has been run end to end against a live
+bridge (with `research.enabled: false`, since this environment has no
+Tavily key of its own to test against): the interviewer challenges wrong
+claims by name, digs into thin answers, moves to new ground once satisfied
+rather than working down a list, and self-terminates in the closing phase
+with time still on the clock rather than running past it. Two real bugs
+turned up in that pass and were fixed - a topic could get re-asked
+indefinitely if the candidate kept dodging it (`notes.py`'s
+`topic_exhausted` now has a deterministic guarantee, not just a model
+judgment call), and a confidently wrong claim could get half-credited as a
+strength in the scorecard (`scorecard.py`'s prompt now has an explicit
+worked example for exactly that case). Typed interview and dictation are
+verified working; a fully spoken interview (the interviewer talking back
+through TTS) isn't built - `pipeline.py`'s mic path only turns speech into
+the answer box's text, same as before this change.
 
-What hasn't been exercised yet is a **spoken** interview through a real
-browser microphone - the WebRTC handshake has only been driven by synthetic
-offers, never by an actual mic. That's the part to try first, and the most
-likely place to find something still rough.
+What hasn't been exercised with a *real* Tavily key is whether the
+research it returns is actually good - the code path (search → digest →
+distillation call → cached `RoleBrief`) is verified working with an
+unfunded/placeholder key and with research disabled, but the quality of
+real search results for a given role is worth checking once a working key
+is in `.env`.
 
 Cerebras is wired up and worth switching to when its account has credit -
-it's substantially faster, which matters when a person is waiting for the
-next question out loud. Right now that account returns `402 Payment
-required` on completions, which is why OpenAI is the default.
+it's substantially faster, which matters when a person is waiting on the
+next question. Right now that account returns `402 Payment required` on
+completions, which is why OpenAI is the default.
