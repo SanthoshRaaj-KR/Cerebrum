@@ -27,7 +27,7 @@ from pipecat.transports.smallwebrtc.request_handler import (
 from interview_agent import interviewer as interviewer_mod
 from interview_agent import pipeline as pipeline_mod
 from interview_agent import profile as profile_mod
-from interview_agent import prompts, report
+from interview_agent import prompts, scorecard
 from interview_agent.config import settings
 from interview_agent.context import CandidateContext
 
@@ -51,55 +51,36 @@ def system_info() -> dict[str, Any]:
     return {
         "model": settings.model,
         "fresher": settings.fresher,
-        "questionsPerSession": settings.questions_per_session,
+        "durationMinutes": settings.duration_minutes,
         "modes": [
-            {
-                "key": m.key,
-                "name": m.name,
-                "blurb": m.blurb,
-                "dims": list(m.dims),
-                "count": settings.questions_per_session,
-            }
+            {"key": m.key, "name": m.name, "blurb": m.blurb, "dims": list(m.dims)}
             for m in (prompts.get(k) for k in settings.modes)
         ],
     }
 
 
 def _session_state(session: interviewer_mod.InterviewSession) -> dict:
-    """Everything the interview screen renders, in one payload."""
+    """Everything the interview screen renders, in one payload. Turn.to_dict()
+    only ever carries a question, an answer, and whether it was skipped -
+    nothing evaluative reaches the candidate until the report, by
+    construction, not just by convention."""
     return {
-        "mode": {"key": session.mode.key, "name": session.mode.name, "dims": list(session.mode.dims)},
+        "mode": {"key": session.mode.key, "name": session.mode.name},
         "role": session.candidate.role,
         "level": session.candidate.level,
-        "index": session.index,
-        "total": session.total,
         "finished": session.finished,
-        # The sidebar shows what was actually asked, not what was planned -
-        # the interviewer deviates from the plan whenever it challenges a
-        # claim or re-asks a dodged question, and a label that still read
-        # "REST API design" next to a question about password storage would
-        # be lying. The grader labels the question it just graded; unasked
-        # slots fall back to the plan's own label.
-        "plan": [
-            {
-                "num": i + 1,
-                "short": (
-                    (session.turns[i].grade.topic if session.turns[i].grade else "")
-                    or session.turns[i].short
-                    if i < len(session.turns)
-                    else s.short
-                ),
-                "score": (
-                    session.turns[i].grade.score
-                    if i < len(session.turns) and session.turns[i].grade
-                    else None
-                ),
-            }
-            for i, s in enumerate(session.plan)
-        ],
+        "clock": session.clock.to_dict() if session.clock else None,
         "turns": [t.to_dict() for t in session.turns],
-        "average": session.average(),
-        "dimensionAverages": session.dimension_averages(),
+        "researchBrief": (
+            {
+                "grounded": session.brief.grounded,
+                "competencies": [c.name for c in session.brief.competencies],
+                "realQuestions": session.brief.real_questions,
+                "sources": session.brief.sources,
+            }
+            if session.brief
+            else None
+        ),
     }
 
 
@@ -160,6 +141,11 @@ async def start_session(body: dict) -> dict:
         level=str(body.get("level", "")).strip(),
         resume=str(body.get("resume", "")).strip(),
     )
+    # Minutes overridable per session - the web console never sends this
+    # (it always wants the configured 40), but tools/quality_check.py does,
+    # so a scripted run doesn't have to wait out a real 40 minutes.
+    minutes_raw = body.get("minutes")
+    minutes = int(minutes_raw) if isinstance(minutes_raw, (int, float)) and minutes_raw else None
 
     try:
         session = interviewer_mod.InterviewSession(mode_key=mode_key, candidate=candidate)
@@ -167,7 +153,7 @@ async def start_session(body: dict) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
     try:
-        await session.start()
+        await session.start(duration_minutes=minutes)
     except Exception as exc:  # noqa: BLE001
         logger.exception("could not start interview session")
         raise HTTPException(502, f"could not start interview: {exc}") from exc
@@ -193,8 +179,8 @@ async def submit_answer(body: dict) -> dict:
     except RuntimeError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        logger.exception("could not grade the answer")
-        raise HTTPException(502, f"could not grade the answer: {exc}") from exc
+        logger.exception("could not process the answer")
+        raise HTTPException(502, f"could not process the answer: {exc}") from exc
 
     return _session_state(_session)
 
@@ -208,15 +194,16 @@ async def get_session() -> dict:
 
 @app.post("/api/session/report")
 async def session_report() -> dict:
-    """The end-of-session report. Marks the interview finished so no
-    further answers are accepted, but leaves it readable."""
+    """The end-of-session scorecard. Marks the interview finished so no
+    further answers are accepted, but leaves it readable. This is the
+    first point anything evaluative reaches the candidate."""
     if _session is None:
         raise HTTPException(400, "no active interview session")
 
     _session.finished = True
-    summary = await report.build(_session)
+    summary = await scorecard.build(_session)
     state = _session_state(_session)
-    state["report"] = summary
+    state["scorecard"] = summary.to_dict()
     return state
 
 
@@ -262,7 +249,7 @@ def main() -> None:
     print(f"\n  Interview Agent bridge on http://{HOST}:{PORT}")
     print(f"  model  {info['model']}   fresher  {str(info['fresher']).lower()}")
     print(f"  modes  {', '.join(m['name'] for m in info['modes'])}")
-    print(f"  {info['questionsPerSession']} questions per session\n")
+    print(f"  {info['durationMinutes']} minutes per session\n")
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
 
 
