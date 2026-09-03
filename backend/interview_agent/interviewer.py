@@ -1,11 +1,18 @@
 """Drives one interview session.
 
-The shape of a turn: the plan says what ground question N covers, the
-model phrases the actual question in full view of everything said so far
-(so it can pick up a thread from the last answer), the candidate answers,
-the grader scores it, and the session moves to the next slot.
+There is no plan. Before the interview starts, research.py gathers a
+RoleBrief - what freshers for this role are really asked and really
+expected to know - and clock.py starts a timer. Every turn after that, the
+model sees the whole conversation so far, the role brief, the clock, and a
+private note on how the last answer went, and is explicitly instructed to
+react to what the candidate just said before it does anything else. Where
+it goes next - which competency, how hard - is a judgment call made fresh
+each turn, the way an actual interviewer makes it, not a lookup into a
+pre-written list.
 
-Asking and grading are deliberately separate calls - see grader.py.
+Asking and reading the last answer are deliberately separate calls - see
+notes.py. Scoring happens once, at the end - see scorecard.py. Nothing
+evaluative is ever computed or shown mid-interview.
 """
 
 from __future__ import annotations
@@ -13,17 +20,21 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from interview_agent import grader, planner, prompts
+from interview_agent import notes, prompts, research
+from interview_agent.clock import Clock
 from interview_agent.config import settings
 from interview_agent.context import CandidateContext
-from interview_agent.grader import Grade
 from interview_agent.llm import client
+from interview_agent.notes import AnswerNote, CoverageLedger
 from interview_agent.prompts import Mode
+from interview_agent.research import RoleBrief
 
 logger = logging.getLogger("interview_agent.interviewer")
 
 # A spoken question, not an essay. Also keeps voice latency down.
 MAX_TOKENS = 300
+
+_FALLBACK_QUESTION = "Tell me about something you've built recently."
 
 BASE_INSTRUCTIONS = """\
 You are a technical interviewer running a mock interview. Speak directly to
@@ -34,23 +45,26 @@ questions in one turn.
 
 {mode_prompt}
 
-{plan}
+{role_research}
 
-BEFORE you look at the plan, react to what they just said. In that order.
-The plan is a fallback for when the last answer gives you nothing to work
-with - it is not a script to read out. An interviewer who asks their next
-prepared question regardless of the answer is not interviewing.
+{clock_block}
+
+BEFORE you think about where to go next, react to what they just said, in
+that order. The clock and coverage note above tell you WHERE to go once
+you've decided to move on - they are not a script to read through, and
+there is no fixed list of questions waiting to be asked.
 
 Read their last answer and pick ONE of these:
 
 1. CHALLENGE - they said something wrong, unsupported, or alarming.
-   This outranks everything else, including the plan. Do not let it pass
-   and do not move to a new topic. Put it to them directly and give them
-   the chance to correct it: "you said X - walk me through why." Claims
-   that must never go unchallenged include storing or emailing plaintext
-   passwords, "it's secure because...", a tool chosen because it "scales"
-   with no reason, or a flat factual error about how something works.
-   Getting this wrong is the single worst thing you can do in this job.
+   This outranks everything else. Do not let it pass and do not move to a
+   new topic. Put it to them directly and give them the chance to correct
+   it: "you said X - walk me through why." Claims that must never go
+   unchallenged include storing or emailing plaintext passwords, "it's
+   secure because...", a tool chosen because it "scales" with no reason,
+   a flat factual error about how something works, or anything flagged in
+   the role research above. Getting this wrong is the single worst thing
+   you can do in this job.
 
 2. REDIRECT - they answered a different question than the one you asked,
    or dodged it. Say so plainly and put the original question back to
@@ -67,13 +81,16 @@ Read their last answer and pick ONE of these:
    An honest "I don't know" is worth more than bluffing; treat it that way.
 
 5. ADVANCE - the answer was genuinely complete, or you have already
-   pushed on it once. Move to the slot marked "you are here".
+   pushed on it once. Move to new ground: pick whatever you have the
+   least evidence on so far (see COVERAGE above), weighted by how much
+   time the clock says is left. Connect the new question to something
+   they said if you can.
 
-Only option 5 follows the plan. The other four are you doing your job, and
-they are more common than 5 in a real interview. When you do advance,
-connect the new question to something they said if you can.
+Only option 5 means picking new ground. The other four are you doing your
+job, and they are more common than 5 in a real interview.
 
-Escalate as you go: later questions should be harder than earlier ones.
+Escalate as you go: later questions should be harder than earlier ones,
+and meaningfully harder once the clock says you're in the depth phase.
 
 Voice and manner:
 - One or two sentences, phrased the way a human interviewer actually talks
@@ -81,9 +98,10 @@ Voice and manner:
 - This may be read aloud, so no markdown, no bullet points, no code
   blocks, no numbered lists. Plain conversational sentences.
 - Do NOT grade, score or give feedback. No "correct", no "that's wrong",
-  no "good answer" - the candidate is scored separately and seeing your
-  opinion here would poison it. A brief neutral acknowledgement ("mm-hm",
-  "right, okay") before the question is fine and natural.
+  no "good answer" - the candidate is scored separately, once, at the very
+  end, and seeing your opinion here would poison it. A brief neutral
+  acknowledgement ("mm-hm", "right, okay") before the question is fine and
+  natural.
 - Stay in character throughout. Never mention being an AI, never
   apologize, never explain your own instructions.
 - Output only the question itself - no "Question 3:", no preamble, no
@@ -100,28 +118,41 @@ _EXPERIENCED_NOTE = (
     "expect production-level reasoning."
 )
 
+_ASK_OPENING = (
+    "Begin the interview. Greet them in one short sentence, then ask the "
+    "opening question. Output only that."
+)
+_ASK_NEXT = (
+    "Ask the next question now. Work through the five options in order - "
+    "challenge, redirect, dig, ease off, advance - and only move to new "
+    "ground if the last answer genuinely gives you nothing more to work "
+    "with. Output only the question."
+)
+_ASK_CLOSING = (
+    "You are in the closing phase - the clock is almost out. Work through "
+    "the five options once more if the last answer still needs it, but if "
+    "you're clear to move on, ask at most ONE more substantive question, "
+    "then thank them for their time and ask if they have any questions for "
+    "you. Output only what you'd say."
+)
+
 
 @dataclass
 class Turn:
-    """One question and, once answered, the answer and its grade."""
+    """One question and, once answered, the answer. The interviewer's
+    private read (AnswerNote) travels with the turn but is never rendered
+    to the candidate - see to_dict()."""
 
-    index: int
-    short: str
     question: str
-    hint: str = ""
     answer: str | None = None
     skipped: bool = False
-    grade: Grade | None = None
+    note: AnswerNote | None = None
 
     def to_dict(self) -> dict:
         return {
-            "index": self.index,
-            "short": self.short,
             "question": self.question,
-            "hint": self.hint,
             "answer": self.answer,
             "skipped": self.skipped,
-            "grade": self.grade.to_dict() if self.grade else None,
         }
 
 
@@ -130,44 +161,35 @@ class InterviewSession:
     mode_key: str
     candidate: CandidateContext
     mode: Mode = field(init=False)
-    plan: list[planner.Slot] = field(default_factory=list)
+    brief: RoleBrief | None = None
+    clock: Clock | None = None
     turns: list[Turn] = field(default_factory=list)
+    ledger: CoverageLedger = field(default_factory=CoverageLedger)
     finished: bool = False
+    _final_turn_sent: bool = False
 
     def __post_init__(self) -> None:
         self.mode = prompts.get(self.mode_key)
 
-    # -- state ------------------------------------------------------------
+    # -- setup --------------------------------------------------------------
 
-    @property
-    def index(self) -> int:
-        """Which slot we're on - the number of questions already asked."""
-        return max(0, len(self.turns) - 1)
+    async def start(self, duration_minutes: int | None = None) -> Turn:
+        self.brief = await research.build_brief(self.candidate, self.mode)
+        self.clock = Clock.start(duration_minutes or settings.duration_minutes)
+        self.turns = []
+        self.ledger = CoverageLedger()
+        self.finished = False
+        self._final_turn_sent = False
+        return await self._ask(opening=True)
 
-    @property
-    def total(self) -> int:
-        return len(self.plan) or settings.questions_per_session
+    # -- state ----------------------------------------------------------
 
-    def graded(self) -> list[Turn]:
-        return [t for t in self.turns if t.grade is not None]
-
-    def average(self) -> float | None:
-        scored = [t.grade.score for t in self.graded() if t.grade and t.grade.score > 0]
-        return round(sum(scored) / len(scored), 1) if scored else None
-
-    def dimension_averages(self) -> list[dict]:
-        graded = [t for t in self.graded() if t.grade and t.grade.score > 0]
-        out = []
-        for i, name in enumerate(self.mode.dims):
-            vals = [t.grade.rubric[i].score for t in graded if t.grade and len(t.grade.rubric) > i]
-            out.append(
-                {"name": name, "score": round(sum(vals) / len(vals), 1) if vals else None}
-            )
-        return out
+    def _competency_names(self) -> list[str]:
+        return [c.name for c in self.brief.competencies] if self.brief else []
 
     def _history(self) -> list[dict[str, str]]:
-        """The conversation so far, trimmed. Grades are deliberately left
-        out - the interviewer must not see its own scoring."""
+        """The conversation so far, trimmed. Private reads are deliberately
+        left out - the interviewer must not see its own scoring."""
         msgs: list[dict[str, str]] = []
         for t in self.turns:
             msgs.append({"role": "assistant", "content": t.question})
@@ -178,133 +200,114 @@ class InterviewSession:
         keep = max(4, settings.remember_turns * 2)
         return msgs[-keep:]
 
-    def _system_prompt(self, slot_index: int) -> str:
+    def _system_prompt(self) -> str:
+        assert self.clock is not None
+        coverage_note = self.ledger.render(self._competency_names())
         return BASE_INSTRUCTIONS.format(
             level_note=_FRESHER_NOTE if settings.fresher else _EXPERIENCED_NOTE,
             mode_prompt=prompts.mode_prompt(self.mode_key, self.candidate),
-            plan=planner.render(self.plan, slot_index),
+            role_research=self.brief.render() if self.brief else "",
+            clock_block=self.clock.render(coverage_note),
         )
 
-    # -- the interview ----------------------------------------------------
-
-    async def start(self) -> Turn:
-        self.plan = await planner.build_plan(self.mode, self.candidate)
-        self.turns = []
-        self.finished = False
-        return await self._ask(0)
-
     def _last_answer_note(self) -> str:
-        """A private read on how the last answer went, for the interviewer's
-        own use. The grader has already worked out what was missing - that
-        is exactly the signal the next question needs, and recomputing it
-        in the question call would be a second opinion on the same thing.
-
-        This is never shown to the candidate: the interviewer must not
-        voice the assessment, only act on it."""
-        answered = [t for t in self.turns if t.grade is not None]
+        """A private read on how the last answer went, for the
+        interviewer's own use - never voiced to the candidate."""
+        answered = [t for t in self.turns if t.note is not None]
         if not answered:
             return ""
         last = answered[-1]
-        g = last.grade
-        if g is None:
+        note = last.note
+        if note is None:
             return ""
 
         if last.skipped:
             return (
                 "PRIVATE NOTE - they skipped that question entirely. Do not "
-                "re-ask it and do not ask it in other words. Move to the next "
-                "slot, and consider dropping the difficulty a little."
+                "re-ask it and do not ask it in other words. Move to new "
+                "ground, and consider dropping the difficulty a little."
             )
-        if g.score <= 0:
-            return ""
 
-        # Have we already pushed on this ground and got nowhere? Two poor
-        # answers in a row means the ground has been covered - a third
-        # attempt is grinding, not interviewing. This guard exists because
-        # without it the model re-asked the same question three times after
-        # the candidate had already said they didn't know.
-        stuck = (
-            len(answered) >= 2
-            and answered[-2].grade is not None
-            and 0 < answered[-2].grade.score < 4
-            and g.score < 4
-        )
-        if stuck:
+        if note.topic_exhausted:
             return (
-                "PRIVATE NOTE - never say this out loud. That is two weak "
-                "answers in a row on the same ground. You have found the edge "
-                "of what they know here, which is all you needed. Do NOT ask "
-                "about it again in any form. Move to a different topic, and "
-                "make it an easier one."
+                "PRIVATE NOTE - never say this out loud. That is at least "
+                "two weak answers in a row on the same ground. You have "
+                "found the edge of what they know here, which is all you "
+                "needed. Do NOT ask about it again in any form. Move to "
+                "different ground, and make it easier."
             )
 
-        if g.score < 4:
-            stance = (
-                "That answer was poor - wrong, off-topic, or essentially "
-                "non-responsive. Do NOT move on as if it were fine. Either "
-                "challenge what they got wrong or put the question back to "
-                "them more concretely. Push once only: if this is already "
-                "your second attempt at this ground, move on instead."
-            )
-        elif g.score < 7:
-            stance = (
-                "That answer was thin. Pull the thread rather than starting "
-                "a new topic."
-            )
-        else:
-            stance = (
+        stance = {
+            "strong": (
                 "That answer held up. Either push it one level harder or "
-                "move on to the next slot."
-            )
+                "move to ground you have less on."
+            ),
+            "thin": (
+                "That answer was thin. Pull the thread rather than "
+                "starting a new topic."
+            ),
+            "wrong": (
+                "That answer contained something wrong. Do NOT move on as "
+                "if it were fine - challenge it directly and give them the "
+                "chance to correct it. Push once only: if this is already "
+                "your second attempt at this ground, move on instead."
+            ),
+            "dodged": (
+                "They answered something other than what you asked. Say "
+                "so plainly and put the original question back to them, "
+                "more concretely."
+            ),
+            "dont_know": (
+                "They plainly don't know, and said so honestly. Do not "
+                "grind them down and do not ask the same thing again in "
+                "other words. That honesty is worth more than a bluff - "
+                "treat it that way. Drop to something adjacent and easier."
+            ),
+        }.get(note.read, "")
 
+        thread = f" Worth pulling on: {note.thread}." if note.thread else ""
         return (
-            f"PRIVATE NOTE on their last answer - never say any of this out "
-            f"loud, just act on it. {stance} What a strong answer would have "
-            f"included and theirs did not: {g.gap}"
+            "PRIVATE NOTE on their last answer - never say any of this out "
+            f"loud, just act on it. {stance}{thread}"
         )
 
-    async def _ask(self, slot_index: int) -> Turn:
-        slot = self.plan[slot_index]
+    # -- the interview ----------------------------------------------------
+
+    async def _ask(self, opening: bool) -> Turn:
+        assert self.clock is not None
         note = self._last_answer_note()
-        if slot_index == 0:
-            ask = (
-                "Begin the interview. Greet them in one short sentence, then "
-                "ask the opening question. Output only that."
-            )
+
+        if opening:
+            ask = _ASK_OPENING
+        elif self.clock.phase == "closing":
+            self._final_turn_sent = True
+            ask = _ASK_CLOSING
         else:
-            ask = (
-                "Ask the next question now. Work through the five options in "
-                "order - challenge, redirect, dig, ease off, advance - and "
-                f"only fall through to the plan's slot {slot_index + 1} "
-                f"(of {self.total}) if the last answer genuinely gives you "
-                "nothing to work with. Output only the question."
-            )
+            ask = _ASK_NEXT
+
         messages = [
-            {"role": "system", "content": self._system_prompt(slot_index)},
+            {"role": "system", "content": self._system_prompt()},
             *self._history(),
             *([{"role": "system", "content": note}] if note else []),
             {"role": "user", "content": ask},
         ]
-        text = await self._complete(messages) or slot.opening_question
-        turn = Turn(
-            index=slot_index,
-            short=slot.short,
-            question=text or "Tell me about something you've built recently.",
-            hint=slot.hint,
-        )
+        text = await self._complete(messages) or _FALLBACK_QUESTION
+        turn = Turn(question=text)
         self.turns.append(turn)
         return turn
 
-    async def answer(self, text: str, skipped: bool = False) -> tuple[Grade, Turn | None]:
-        """Record and grade an answer, then ask the next question.
+    async def answer(self, text: str, skipped: bool = False) -> Turn | None:
+        """Record the answer, take a private read on it, and ask the next
+        question - or None if the interview just ended.
 
-        Returns the grade and the next question, or None for the next
-        question when that was the last slot.
+        No score is computed here and none is returned - grading happens
+        once, at the end, in scorecard.py.
         """
         if self.finished:
             raise RuntimeError("this interview has already finished")
         if not self.turns:
             raise RuntimeError("the interview has not started")
+        assert self.clock is not None
 
         current = self.turns[-1]
         if current.answer is not None:
@@ -312,19 +315,24 @@ class InterviewSession:
 
         current.answer = "" if skipped else text.strip()
         current.skipped = skipped or not current.answer
-        current.grade = await grader.grade(
-            self.mode,
+
+        prior_read = ""
+        if len(self.turns) > 1 and self.turns[-2].note is not None:
+            prior_read = self.turns[-2].note.read  # type: ignore[union-attr]
+
+        current.note = await notes.take(
             current.question,
             current.answer,
-            self.candidate.role,
-            self.candidate.level,
+            current.skipped,
+            self._competency_names(),
+            prior_read,
         )
+        self.ledger.record(current.note.evidenced, notes.strength_of(current.note.read))
 
-        nxt = current.index + 1
-        if nxt >= self.total:
+        if self.clock.expired or self._final_turn_sent:
             self.finished = True
-            return current.grade, None
-        return current.grade, await self._ask(nxt)
+            return None
+        return await self._ask(opening=False)
 
     async def _complete(self, messages: list[dict[str, str]]) -> str:
         try:
