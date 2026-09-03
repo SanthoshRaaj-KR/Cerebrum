@@ -117,6 +117,28 @@ than a senior-level rubric would:
   confidence, and not being able to explain their own project one level
   deeper than the rehearsed summary.
 
+Before calling anything a strength, check whether the specific technical
+claim in it was actually correct - fluent, confident, and on-topic is not
+the same as right. Read every answer for its content, not its topic:
+"they talked about indexing" is not evidence indexing was understood, it
+is just evidence indexing came up. If what they actually said about it was
+wrong, that is a gap, full stop - it must not be softened into a strength
+anywhere in the scorecard, including the per-competency evidence field.
+
+Worked example: a candidate says "indexes make everything faster, there's
+no real downside, that's why databases have them." That claim is WRONG -
+indexes cost extra work on every write and disk space, which is exactly
+why they aren't put on every column. The correct write-up: this goes in
+gaps ("you said indexes have no downside - they slow down writes and cost
+storage, which is why you index selectively"), the Database competency is
+not_shown or developing at best, and nothing about this answer is praised
+as "familiarity with indexing" or similar - knowing the word is not the
+same as understanding the trade-off, and crediting it as if it were is
+exactly the mistake this paragraph exists to prevent. Structural check
+before you finalize: if a claim is named in gaps, no strengths bullet may
+describe that same claim or topic in softer language - a wrong answer
+gets exactly one appearance in the scorecard, in gaps, not two.
+
 For each competency listed below, decide:
 - solid: they showed real evidence of it, correct and with some depth.
 - developing: touched on it, but shallow, partial, or shaky.

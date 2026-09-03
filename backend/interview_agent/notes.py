@@ -99,18 +99,25 @@ Competencies being tracked for this role: {competencies}
 
 - read: strong (correct, specific, shows real reasoning) / thin (right
   shape, shallow) / wrong (a confident but incorrect claim) / dodged
-  (answered something else, or skipped) / dont_know (an honest admission
-  they don't know - this is NOT the same as wrong, do not conflate them;
-  being straight about not knowing is worth more than bluffing).
+  (answered something else, deflected, asked for clarification instead of
+  attempting an answer, or skipped) / dont_know (an honest admission they
+  don't know - this is NOT the same as wrong, do not conflate them; being
+  straight about not knowing is worth more than bluffing).
 - evidenced: which of the tracked competencies this answer actually gave
   evidence on, by name exactly as listed above. Empty list if none.
-- topic_exhausted: true only if this is at least the second consecutive
-  weak/thin answer on the SAME ground - meaning the edge of what they know
-  here has already been found, and pushing a third time would be
-  grinding, not interviewing.
+- topic_exhausted: you are told below whether the PREVIOUS answer, on this
+  same ground, was also weak (thin/wrong/dodged/dont_know). Set this true
+  if THIS answer is weak too - any combination of thin, wrong, dodged, or
+  dont_know counts, they do not have to be the same read twice. Two weak
+  answers in a row on the same ground means the edge of what they know or
+  are willing to say has been found, and asking a third time in any form
+  is grinding, not interviewing. If the previous answer was strong, or
+  this is the first question on new ground, this is always false.
 - thread: the single most interesting specific thing in their answer worth
   pulling on next, in a few words. Empty string if nothing stands out.
 """
+
+_PRIOR_WEAK = ("thin", "wrong", "dodged", "dont_know")
 
 
 async def take(
@@ -123,10 +130,14 @@ async def take(
     """Never raises - a failed read just means the next question falls back
     to the reactive ladder's own judgement from the raw transcript."""
     if skipped or not (answer or "").strip():
-        return AnswerNote(
-            read="dodged",
-            topic_exhausted=prior_read in ("thin", "wrong", "dodged"),
-        )
+        return AnswerNote(read="dodged", topic_exhausted=prior_read in _PRIOR_WEAK)
+
+    prior_line = (
+        f"The PREVIOUS answer on this same ground was read as: {prior_read}."
+        if prior_read
+        else "This is the first question on this ground - no previous answer "
+        "to compare against."
+    )
 
     try:
         completion = await client().chat.completions.create(
@@ -140,7 +151,7 @@ async def take(
                 },
                 {
                     "role": "user",
-                    "content": f"QUESTION:\n{question}\n\nANSWER:\n{answer}",
+                    "content": f"{prior_line}\n\nQUESTION:\n{question}\n\nANSWER:\n{answer}",
                 },
             ],
             max_tokens=MAX_TOKENS,
@@ -157,10 +168,22 @@ async def take(
     read = str(payload.get("read", "")).strip()
     if read not in _READS:
         read = "thin"
+
+    # Deterministic safety net, independent of whether the model followed
+    # the topic_exhausted instruction above: two weak reads in a row on the
+    # same ground always counts as exhausted. This is the guard the
+    # original grader-in-the-loop design had (see interviewer.py's git
+    # history) after the model re-asked the same question three times
+    # without it - it must not depend on the model reliably reasoning about
+    # a previous turn it can't see in this isolated call.
+    topic_exhausted = bool(payload.get("topic_exhausted", False)) or (
+        prior_read in _PRIOR_WEAK and read in _PRIOR_WEAK
+    )
+
     return AnswerNote(
         read=read,
         evidenced=[str(e).strip() for e in payload.get("evidenced", []) if str(e).strip()],
-        topic_exhausted=bool(payload.get("topic_exhausted", False)),
+        topic_exhausted=topic_exhausted,
         thread=str(payload.get("thread", "")).strip(),
     )
 
