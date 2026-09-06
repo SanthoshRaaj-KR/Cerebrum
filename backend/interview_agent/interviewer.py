@@ -13,8 +13,10 @@ pre-written list.
 The interview ends when the coverage ledger says every competency has a
 read (see coverage.py), with a min/max question band as the floor and
 ceiling. Asking and reading the last answer are deliberately separate
-calls - see evaluator.py. Scoring happens once, at the end - see
-scorecard.py. Nothing evaluative is ever computed or shown mid-interview.
+calls - see evaluator.py. Each answer is also judged more deeply in a
+background task as the interview runs, and the report is written from
+those at the end - see scorecard.RunningScore. Nothing evaluative is ever
+shown to the candidate mid-interview.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from interview_agent.llm import client
 from interview_agent.prompts import Mode
 from interview_agent.research import RoleBrief
 from interview_agent.resume import ResumeDigest
+from interview_agent.scorecard import RunningScore
 
 logger = logging.getLogger("interview_agent.interviewer")
 
@@ -170,6 +173,9 @@ class InterviewSession:
     resume_digest: ResumeDigest | None = None
     turns: list[Turn] = field(default_factory=list)
     ledger: CoverageLedger = field(default_factory=CoverageLedger)
+    # Per-answer judgements accumulated in the background while the
+    # interview runs; the scorecard is written from them at the end.
+    running_score: RunningScore = field(default_factory=RunningScore)
     finished: bool = False
     _final_turn_sent: bool = False
     # Per-session ceiling on questions; None means use settings.max_questions.
@@ -190,6 +196,7 @@ class InterviewSession:
         )
         self.turns = []
         self.ledger = CoverageLedger()
+        self.running_score = RunningScore()
         self.finished = False
         self._final_turn_sent = False
         self._max_questions = max_questions
@@ -351,8 +358,10 @@ class InterviewSession:
         """Record the answer, take a private read on it, and ask the next
         question - or None if the interview just ended.
 
-        No score is computed here and none is returned - grading happens
-        once, at the end, in scorecard.py.
+        No score is returned and none reaches the candidate. A deeper
+        judgement of this answer is kicked off in the background here (see
+        scorecard.RunningScore) but it is never awaited on this path and
+        never surfaces until the report.
         """
         if self.finished:
             raise RuntimeError("this interview has already finished")
@@ -391,6 +400,18 @@ class InterviewSession:
             evaluator.strength_of(current.note.read),
             focus=current.note.focus,
             exhausted=current.note.topic_exhausted and same_focus,
+        )
+
+        # Fire-and-forget: the deep judgement of this answer runs while the
+        # candidate is already reading the next question. Never awaited here
+        # - they must not wait on a verdict they aren't allowed to see.
+        self.running_score.schedule(
+            index=len(self.turns),
+            question=current.question,
+            answer=current.answer or "",
+            skipped=current.skipped,
+            note=current.note,
+            rubric=self._rubric(),
         )
 
         if self._final_turn_sent or len(self.turns) >= self.question_cap:

@@ -27,7 +27,7 @@ from pipecat.transports.smallwebrtc.request_handler import (
 from interview_agent import interviewer as interviewer_mod
 from interview_agent import pipeline as pipeline_mod
 from interview_agent import profile as profile_mod
-from interview_agent import prompts, scorecard
+from interview_agent import prompts
 from interview_agent.config import settings
 from interview_agent.context import CandidateContext
 
@@ -50,6 +50,7 @@ def system_info() -> dict[str, Any]:
     """The real configuration, for the console to display instead of guessing."""
     return {
         "model": settings.model,
+        "scorerModel": settings.scorer_model,
         "fresher": settings.fresher,
         "maxQuestions": settings.max_questions,
         "modes": [
@@ -197,12 +198,15 @@ async def submit_answer(body: dict) -> dict:
 async def session_report() -> dict:
     """The end-of-session scorecard. Marks the interview finished so no
     further answers are accepted, but leaves it readable. This is the
-    first point anything evaluative reaches the candidate."""
+    first point anything evaluative reaches the candidate.
+
+    finalize() waits for any per-answer judgements still running in the
+    background before writing the report."""
     if _session is None:
         raise HTTPException(400, "no active interview session")
 
     _session.finished = True
-    summary = await scorecard.build(_session)
+    summary = await _session.running_score.finalize(_session)
     state = _session_state(_session)
     state["scorecard"] = summary.to_dict()
     return state
@@ -248,7 +252,8 @@ def main() -> None:
 
     info = system_info()
     print(f"\n  Cerebrum bridge on http://{HOST}:{PORT}")
-    print(f"  model  {info['model']}   fresher  {str(info['fresher']).lower()}")
+    print(f"  ask    {info['model']}      judge  {info['scorerModel']}")
+    print(f"  fresher  {str(info['fresher']).lower()}")
     print(f"  modes  {', '.join(m['name'] for m in info['modes'])}")
     print(f"  up to {info['maxQuestions']} questions per session\n")
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")

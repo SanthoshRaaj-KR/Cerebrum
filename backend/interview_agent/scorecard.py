@@ -1,12 +1,20 @@
-"""The end-of-interview scorecard.
+"""The scorecard, accumulated during the interview and written at the end.
 
-Nothing is scored while the interview is running - no score, no rubric,
-no "missing" line ever reaches the candidate mid-session, because no real
-interviewer grades you to your face. grader.py and report.py used to be
-two separate calls (score each answer as it happens, then look for
-patterns across the transcript afterwards); this replaces both with one
-call at the end, over the whole conversation and the competency map
-research.py grounded it in.
+Nothing is scored while the interview is running *to the candidate* - no
+score, no rubric, no "missing" line ever reaches them mid-session, because
+no real interviewer grades you to your face. But the interviewer is
+absolutely forming a view as it goes, and so does this: after each answer
+a background task judges that one answer carefully (RunningScore.update),
+off the critical path, while the candidate is already reading the next
+question. At the end, finalize() writes the report from that accumulated
+per-answer analysis plus the whole transcript.
+
+Splitting it this way buys two things. Each answer gets real attention
+instead of a skim during one big end-of-interview pass; and the expensive
+judging happens in parallel with the conversation rather than after it.
+The per-answer pass runs on settings.scorer_model - catching a confidently
+wrong technical claim is the hardest call in the system and it is the one
+place a stronger model clearly pays for itself.
 
 The calibration below exists because a fresher's scorecard has to answer
 one honest question - "would a company hire this person as a fresher" -
@@ -18,19 +26,23 @@ someone with real gaps walks away thinking they're fine.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass, field
 
 from interview_agent.config import settings
+from interview_agent.evaluator import AnswerNote, Rubric
 from interview_agent.llm import client
 
 logger = logging.getLogger("interview_agent.scorecard")
 
 MAX_TOKENS = 1800
+VERDICT_MAX_TOKENS = 400
 
 _STATUSES = ("solid", "developing", "not_shown", "not_covered")
 _VERDICTS = ("strong_yes", "yes", "borderline", "not_yet")
+_DEPTHS = ("solid", "partial", "absent")
 
 
 @dataclass
@@ -67,6 +79,199 @@ class Scorecard:
             "sources": self.sources,
             "grounded": self.grounded,
         }
+
+
+# -- per-answer verdict (the background half) -------------------------------
+
+
+@dataclass
+class AnswerVerdict:
+    """The background scorer's read on one answer. Deeper than the fast
+    on-path read in evaluator.py, because this one isn't holding up the
+    next question."""
+
+    index: int
+    question: str
+    competency: str = ""
+    correct: bool = False
+    depth: str = "absent"
+    evidence: str = ""
+    gap: str = ""
+
+    def render(self) -> str:
+        head = f"Q{self.index}"
+        if self.competency:
+            head += f" [{self.competency}]"
+        head += f"  correct={'yes' if self.correct else 'no'}  depth={self.depth}"
+        lines = [head]
+        if self.evidence:
+            lines.append(f"    showed: {self.evidence}")
+        if self.gap:
+            lines.append(f"    gap:    {self.gap}")
+        return "\n".join(lines)
+
+
+_VERDICT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "competency": {"type": "string"},
+        "correct": {"type": "boolean"},
+        "depth": {"type": "string", "enum": list(_DEPTHS)},
+        "evidence": {"type": "string"},
+        "gap": {"type": "string"},
+    },
+    "required": ["competency", "correct", "depth", "evidence", "gap"],
+    "additionalProperties": False,
+}
+
+_VERDICT_PROMPT = """\
+Judge ONE answer from a mock interview with an entry-level candidate. You
+are not talking to them - this is analysis that will be folded into their
+scorecard later.
+
+{rubric}
+
+Work out the technical content first, before you judge anything else:
+what would a correct answer contain, what did they actually say, and where
+is the difference. Fluent, confident and on-topic is not the same as
+right. If the claim is wrong, it is wrong no matter how well it was put.
+
+- competency: which tracked competency this answer bears on, by name
+  exactly as listed above. Empty string if it maps to none of them.
+- correct: was the technical content of the answer right? An answer that
+  is vague but not incorrect is still correct=true; one containing a
+  confident false claim is correct=false.
+- depth: solid (a fresher-level answer with real reasoning behind it) /
+  partial (right shape, shallow, or only half the picture) / absent (they
+  didn't have it, skipped, dodged, or got it wrong).
+- evidence: one short line naming what they actually demonstrated. Empty
+  string unless correct is true - a wrong answer demonstrates nothing.
+- gap: one short line naming what a good fresher answer would have had
+  that this didn't, or what specifically was wrong and what is actually
+  true. Empty string only when the answer fully held up.
+
+Calibrate to a FRESHER. Naming the concept, giving one worked example and
+reasoning about a trade-off out loud is a solid entry-level answer. An
+honest "I don't know" is depth=absent but is NOT a wrong claim - never
+record it as correct=false with an invented gap; its gap is simply the
+topic they didn't know.
+"""
+
+
+async def _judge_answer(
+    index: int,
+    question: str,
+    answer: str,
+    skipped: bool,
+    note: AnswerNote,
+    rubric: Rubric,
+) -> AnswerVerdict:
+    """Never raises - a failed verdict just means this answer contributes
+    nothing extra to the final scorecard, which still sees the transcript."""
+    if skipped or not (answer or "").strip():
+        return AnswerVerdict(
+            index=index,
+            question=question,
+            competency=note.focus,
+            correct=False,
+            depth="absent",
+            gap="skipped this question",
+        )
+
+    try:
+        completion = await client().chat.completions.create(
+            model=settings.scorer_model,
+            messages=[
+                {"role": "system", "content": _VERDICT_PROMPT.format(rubric=rubric.render())},
+                {
+                    "role": "user",
+                    "content": f"QUESTION:\n{question}\n\nANSWER:\n{answer}",
+                },
+            ],
+            max_tokens=VERDICT_MAX_TOKENS,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "answer_verdict",
+                    "schema": _VERDICT_SCHEMA,
+                    "strict": True,
+                },
+            },
+        )
+        payload = json.loads(completion.choices[0].message.content or "{}")
+    except Exception:  # noqa: BLE001
+        logger.exception("could not judge answer %d in the background", index)
+        return AnswerVerdict(index=index, question=question, competency=note.focus)
+
+    competency = str(payload.get("competency", "")).strip()
+    if competency not in rubric.names:
+        competency = note.focus
+    depth = str(payload.get("depth", "")).strip()
+    if depth not in _DEPTHS:
+        depth = "partial"
+
+    return AnswerVerdict(
+        index=index,
+        question=question,
+        competency=competency,
+        correct=bool(payload.get("correct", False)),
+        depth=depth,
+        evidence=str(payload.get("evidence", "")).strip(),
+        gap=str(payload.get("gap", "")).strip(),
+    )
+
+
+class RunningScore:
+    """Per-answer verdicts accumulated in the background during the
+    interview, then written up at the end.
+
+    schedule() is fire-and-forget on purpose: it must never make the
+    candidate wait for a judgement they are not allowed to see. finalize()
+    waits for whatever is still in flight before writing the report.
+    """
+
+    def __init__(self) -> None:
+        self.verdicts: list[AnswerVerdict] = []
+        # Strong refs: a bare create_task() can be garbage collected
+        # mid-flight, which silently drops the verdict.
+        self._tasks: set[asyncio.Task] = set()
+
+    def schedule(
+        self,
+        index: int,
+        question: str,
+        answer: str,
+        skipped: bool,
+        note: AnswerNote,
+        rubric: Rubric,
+    ) -> None:
+        async def _run() -> None:
+            verdict = await _judge_answer(index, question, answer, skipped, note, rubric)
+            self.verdicts.append(verdict)
+
+        task = asyncio.create_task(_run())
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
+    async def await_pending(self) -> None:
+        if not self._tasks:
+            return
+        # return_exceptions: a background judgement that blew up must not
+        # take the report down with it.
+        await asyncio.gather(*list(self._tasks), return_exceptions=True)
+
+    def render(self) -> str:
+        if not self.verdicts:
+            return ""
+        ordered = sorted(self.verdicts, key=lambda v: v.index)
+        return "\n".join(v.render() for v in ordered)
+
+    async def finalize(self, session) -> Scorecard:
+        await self.await_pending()
+        return await _write_scorecard(session, self.render())
+
+
+# -- the final write-up -----------------------------------------------------
 
 
 _SCHEMA = {
@@ -144,8 +349,8 @@ For each competency listed below, decide:
 - developing: touched on it, but shallow, partial, or shaky.
 - not_shown: it came up and they didn't have it, or answered wrong.
 - not_covered: it never came up in this conversation - the interview
-  simply didn't reach it in the time available. Do not penalize this; it
-  is a fact about time, not about them.
+  simply didn't reach it. Do not penalize this; it is a fact about what
+  there was room to ask, not about them.
 
 Then write:
 - verdict: strong_yes / yes / borderline / not_yet - would you advance
@@ -169,6 +374,15 @@ numbers inside the strengths/gaps/notes text - those are prose, the score
 field is the number.
 """
 
+_ANALYSIS_HEADER = """\
+PER-ANSWER ANALYSIS - each answer was judged on its own, during the
+interview, with more care than one pass over a whole transcript allows.
+Trust it on whether a specific technical claim was correct or wrong. Use
+the transcript below it for the things it cannot see: patterns across
+several answers, how they handled being pushed, whether they corrected
+themselves.
+"""
+
 
 def _transcript(turns) -> str:
     parts = []
@@ -189,7 +403,7 @@ def _fallback(competency_names: list[str], headline: str) -> Scorecard:
     )
 
 
-async def build(session) -> Scorecard:
+async def _write_scorecard(session, analysis: str) -> Scorecard:
     """Never raises - a scoring failure shouldn't cost the candidate a
     readable report, even a degraded one."""
     brief = getattr(session, "brief", None)
@@ -212,10 +426,11 @@ async def build(session) -> Scorecard:
         if brief and brief.competencies
         else "(no specific competency map was gathered - judge generally for this role and mode)"
     )
+    analysis_block = f"{_ANALYSIS_HEADER}\n{analysis}\n\n" if analysis else ""
 
     try:
         completion = await client().chat.completions.create(
-            model=settings.model,
+            model=settings.scorer_model,
             messages=[
                 {"role": "system", "content": _PROMPT},
                 {
@@ -225,6 +440,7 @@ async def build(session) -> Scorecard:
                         f"Target role: {session.candidate.role or 'unspecified'}\n"
                         f"Level: {session.candidate.level or 'fresher'}\n\n"
                         f"COMPETENCIES TRACKED FOR THIS ROLE:\n{competency_block}\n\n"
+                        f"{analysis_block}"
                         f"TRANSCRIPT\n{_transcript(session.turns)}"
                     ),
                 },

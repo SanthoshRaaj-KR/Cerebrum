@@ -87,6 +87,15 @@ def check_llm() -> None:
     else:
         print(f"{WARN} model {wanted} not in your account's model list")
 
+    # The judging half of the system can run on a stronger model than the
+    # asking half; it has to be served by this same provider.
+    scorer = settings.scorer_model
+    if scorer != wanted:
+        if scorer in available:
+            print(f"{OK} scorer model {scorer} available")
+        else:
+            print(f"{WARN} scorer model {scorer} not in your account's model list")
+
     # Listing models doesn't touch billing; actually running an interview
     # does. A key can be valid and still be out of credit - that only shows
     # up on a real completion call, so make the smallest one that exists.

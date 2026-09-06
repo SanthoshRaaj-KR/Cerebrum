@@ -72,6 +72,16 @@ class Settings:
         return str(self.interviewer.get("model", default))
 
     @property
+    def scorer_model(self) -> str:
+        """The model for evaluation calls that get to take their time - the
+        background running score and the wrong-claim double-check. Judging
+        subtly-wrong technical claims is where a stronger model earns its
+        cost; asking the next question doesn't need one. Must be served by
+        the same provider as interviewer.model; falls back to it when unset.
+        """
+        return str(self.interviewer.get("scorer_model", "") or self.model)
+
+    @property
     def llm_api_key(self) -> str:
         """The key for whichever provider is selected."""
         return (
