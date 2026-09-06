@@ -67,8 +67,13 @@ interview:
   # stop before min_questions even if coverage looks done early, and it
   # always wraps by max_questions. max_questions is overridable per session
   # (tools/quality_check.py uses this to keep scripted runs short).
+  #
+  # Sized for roughly a 30-minute interview: at a couple of minutes per
+  # exchange, 15 questions is about right. This is a question budget, not a
+  # clock - nothing here is timed and nothing is ever scored on how long an
+  # answer took.
   min_questions: 8
-  max_questions: 22
+  max_questions: 15
 
 research:
   # Before the interview starts, the candidate's target role is researched

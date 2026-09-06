@@ -122,9 +122,10 @@ class Settings:
     @property
     def max_questions(self) -> int:
         # Hard ceiling: the interview always wraps by here regardless of
-        # coverage. Overridable per session via the start payload (the
-        # quality-check harness uses it) - see bridge.start_session.
-        return max(self.min_questions, int(self.interview.get("max_questions", 22)))
+        # coverage. Sized for roughly a 30-minute interview - a question
+        # budget, never a clock. Overridable per session via the start
+        # payload (the quality-check harness uses it).
+        return max(self.min_questions, int(self.interview.get("max_questions", 15)))
 
     @property
     def research_enabled(self) -> bool:

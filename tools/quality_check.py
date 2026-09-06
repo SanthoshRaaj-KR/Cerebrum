@@ -21,6 +21,12 @@ logic in interviewer.py has broken.
 `--max-questions` overrides interview.max_questions for the session
 (default below) - there's no clock any more, but a scripted run of a dozen
 fixed answers doesn't need the full coverage-driven length either.
+
+Every run prints which models and which coordinator produced it. Flipping
+interviewer.coordinator between `code` and `agent` in config.yaml and
+diffing two `hostile` transcripts is how you tell whether the LLM main
+agent is actually interviewing better than the deterministic loop, or just
+costing three extra round-trips a question.
 """
 
 from __future__ import annotations
@@ -119,6 +125,20 @@ def _check_leak(question: str) -> None:
         print(f"    !! POSSIBLE SCORE LEAK in question text: {question[:200]}")
 
 
+def _banner() -> str:
+    """What actually ran, so two transcripts can be compared honestly -
+    especially when A/B-ing interviewer.coordinator between `code` and
+    `agent`, which is invisible from the transcript alone."""
+    try:
+        sysinfo = post_get("/api/health")["system"]
+    except Exception:  # noqa: BLE001
+        return "(could not read /api/health)"
+    return (
+        f"ask={sysinfo.get('model')}  judge={sysinfo.get('scorerModel')}  "
+        f"turns-driven-by={sysinfo.get('coordinator')}"
+    )
+
+
 def run(
     mode: str,
     answers: list[str],
@@ -129,6 +149,7 @@ def run(
     post("/api/session/reset")
     print("=" * 76)
     print(f"{label}   [{mode}]  ({cap} question cap)")
+    print(_banner())
     print("=" * 76)
 
     st = post(

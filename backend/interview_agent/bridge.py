@@ -51,6 +51,7 @@ def system_info() -> dict[str, Any]:
     return {
         "model": settings.model,
         "scorerModel": settings.scorer_model,
+        "coordinator": settings.coordinator,
         "fresher": settings.fresher,
         "maxQuestions": settings.max_questions,
         "modes": [
@@ -253,7 +254,7 @@ def main() -> None:
     info = system_info()
     print(f"\n  Cerebrum bridge on http://{HOST}:{PORT}")
     print(f"  ask    {info['model']}      judge  {info['scorerModel']}")
-    print(f"  fresher  {str(info['fresher']).lower()}")
+    print(f"  turns driven by  {info['coordinator']}   fresher  {str(info['fresher']).lower()}")
     print(f"  modes  {', '.join(m['name'] for m in info['modes'])}")
     print(f"  up to {info['maxQuestions']} questions per session\n")
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")

@@ -1,31 +1,35 @@
 # Cerebrum
 
 A mock interviewer for entry-level candidates that actually behaves like
-one. Pick a mode, type your target role, and it runs a real 40-minute
-interview: no fixed question list, no plan to fall back on. Before it
-starts, it looks up what your target role's fresher interviews actually
-cover and researches real questions companies have asked; from there it
-follows the clock and reacts to what you just said - challenging a wrong
-claim, digging into a thin answer, easing off an honest "I don't know",
-moving to new ground once it's satisfied - the way a person running the
-room would, not a quiz working down a list. Nothing is scored until the
-40 minutes are up: no score, no rubric, no hint of a verdict mid-interview,
-because no real interviewer grades you to your face.
+one. Pick a mode, paste your résumé, type your target role, and it runs a
+real interview of about half an hour: no fixed question list, no plan to
+fall back on. Before it starts, it looks up what your target role's
+fresher interviews actually cover and researches real questions companies
+have asked; from there it reacts to what you just said - challenging a
+wrong claim, digging into a thin answer, easing off an honest "I don't
+know", moving to new ground once it's satisfied - the way a person running
+the room would, not a quiz working down a list. It ends when it has a read
+on everything worth asking about, not when a timer runs out. Nothing is
+scored to your face: no score, no rubric, no hint of a verdict
+mid-interview, because no real interviewer grades you as you go.
 
 ```
-  target role                researched before question one - real fresher
-      │                      interview questions + a competency map, from Tavily
+  target role + résumé       researched before question one - a competency map
+      │                      and real fresher questions (Tavily → Brave), plus
+      │                      the résumé digested once into a structured view
       ▼
   the interview loop         one turn at a time, full history in context
       │
-      ├── react to the last answer   challenge / redirect / dig / ease off / advance
-      ├── the clock                  opening → core → depth → closing, 40 min
-      └── the coverage ledger        which competencies still have nothing shown
-      │
+      ├── evaluator          how did that answer go, privately - and is a
+      │                      "wrong" call worth double-checking before it counts
+      ├── the move            challenge / redirect / dig / ease off / advance
+      ├── questionnaire      writes the one question the candidate sees
+      └── coverage ledger    which competencies still have nothing shown;
+      │                      when none are left, the interview wraps up
       ▼
-  the scorecard               one call, once, at the end - calibrated to
-                               "would a company hire this fresher", not a
-                               senior bar
+  the scorecard              built from per-answer judgements made in the
+                              background as you went - calibrated to "would a
+                              company hire this fresher", not a senior bar
 ```
 
 Six modes (Résumé & Projects, SDE & Backend, Computer Fundamentals, System
@@ -144,13 +148,13 @@ setup → interview → report, talking to the bridge over REST and to the
 mic over WebRTC.
 
 - **Setup** - pick a mode, type your target role and level, paste or
-  upload a résumé (optional - the questions get a lot more specific with
-  one).
-- **Interview** - the actual thing: a countdown clock, the competencies
-  research turned up, and the conversation itself. Type an answer or
-  dictate it; nothing is scored here.
-- **Report** - the scorecard once the clock runs out or you end it early:
-  verdict, per-competency status, strengths, gaps, coach notes, the
+  upload a résumé. The résumé is required: it's digested before the first
+  question and the interview is built around it.
+- **Interview** - the actual thing: how far through you are, the
+  competencies research turned up, and the conversation itself. Type an
+  answer or dictate it; nothing is scored here.
+- **Report** - the scorecard once the interview wraps up or you end it
+  early: verdict, per-competency status, strengths, gaps, coach notes, the
   sources it researched from, and the full transcript.
 
 Nothing here is authenticated - the bridge binds to `127.0.0.1` only, same
@@ -159,35 +163,55 @@ machine.
 
 ## How the interview logic works
 
-There's no question plan. `backend/interview_agent/research.py` runs
-before the first question - two or three Tavily searches for the
-candidate's target role, distilled into a `RoleBrief`: a competency map
-(each with a `fresher_bar` - what counts as *having* it at entry level,
-not at a senior level) and real questions found for calibration, framed
+There's no question plan. Before the first question, two things run:
+`research.py` searches the candidate's target role (Tavily, falling back
+to Brave - see `search.py`) and distills a `RoleBrief`: a competency map,
+each with a `fresher_bar` (what counts as *having* it at entry level, not
+at a senior level), plus real questions found for calibration, framed
 explicitly as "don't read these out, don't work through them in order."
+Alongside it, `resume.py` turns the résumé into a structured digest once,
+so no turn has to re-parse noisy PDF text. For the `resume_projects` mode
+there is no external syllabus to search, so `gateway.py` replaces
+`research.py` entirely and builds the brief *from the résumé* - the
+competencies are the candidate's own projects and the red flags are
+claims in their own document.
 
-From there, `interviewer.py` composes one system prompt per turn from: a
-fixed reactive ladder (challenge a wrong claim / redirect a dodge / dig
-into a thin answer / ease off an honest "I don't know" / only then advance
-to new ground), the mode's own focus (`prompts/sde_backend.py` etc.), the
-role brief, and `coverage.py`'s ledger, which changes every turn (which
-competencies still have nothing shown, so "advance" means picking real
-gaps, not the next line of a script). There is no clock: the interview
-runs until every competency has a read, bounded by a min/max question
-band.
+Three agents run the interview, and which of them is in charge is a config
+switch (`interviewer.coordinator`):
 
-The cross-questioning behavior isn't a special feature - it's a prompting
-and full-history discipline. Every turn the model sees the whole
-conversation so far, plus a private read on how the last answer went
-(`evaluator.read()` - strong/thin/wrong/dodged/dont_know plus the gap
-between their answer and a correct one, never shown to the candidate)
-that decides which of the five options it should take. Nothing
-evaluative reaches the candidate until the interview ends: `scorecard.py`
-runs once, over the whole transcript, calibrated explicitly to "would a
-company hire this fresher" rather than a senior bar - naming a concept
-plus one worked example plus reasoning about a trade-off out loud is a
-solid 7-8, and an honest "I don't know" costs far less than a confidently
-wrong claim.
+- **questionnaire** (`questionnaire.py`, or `gateway.py` for the résumé
+  round) writes one question, and is the only thing allowed to produce
+  words the candidate sees. It works from the mode's focus
+  (`prompts/sde_backend.py` etc.), the role brief, the résumé digest, and
+  `coverage.py`'s ledger - which competencies still have nothing shown, so
+  "advance" means picking real gaps rather than the next line of a script.
+- **evaluator** (`evaluator.py`) reads each answer privately:
+  strong/thin/wrong/dodged/dont_know, which competency it bears on, and
+  the gap between what they said and what a correct answer contains. A
+  `wrong` verdict - the one thing that gets challenged to their face -
+  gets a second focused opinion on a stronger model before it counts,
+  because telling a candidate they're wrong when they're right is the
+  worst thing this can do.
+- **main agent** (`agent.py`) calls those two as tools and decides the move
+  in between. It never writes to the candidate, can't skip judging an
+  answer, can't loop, and doesn't own the question cap, the ledger, or the
+  scorer - those are enforced in code whichever coordinator is driving.
+  Off by default; `coordinator: code` runs the deterministic ladder
+  instead.
+
+There is no clock. The interview runs until every competency has a read -
+shown at thin-or-better, or pushed until the edge of what they know was
+found - bounded by a min/max question budget sized for about thirty
+minutes. Nothing is ever scored on how long an answer took.
+
+Nothing evaluative reaches the candidate until the end. As each answer
+comes in, a background task judges it properly (`scorecard.RunningScore`)
+while they're already reading the next question; at the end that
+accumulated per-answer analysis plus the transcript becomes the scorecard,
+calibrated explicitly to "would a company hire this fresher" rather than a
+senior bar - naming a concept plus one worked example plus reasoning about
+a trade-off out loud is a solid 7-8, and an honest "I don't know" costs
+far less than a confidently wrong claim.
 
 The same composition is used whether the interview is running over the
 text-and-dictation console (`interviewer.InterviewSession`, a plain
@@ -203,23 +227,27 @@ the search again.
 
 ## Status
 
-`.\start.ps1 -Check` passes fully green on the default (OpenAI + Deepgram
-+ Tavily) setup. The full loop - research → clock-paced conversation →
-end-of-interview scorecard - has been run end to end against a live
-bridge (with `research.enabled: false`, since this environment has no
-Tavily key of its own to test against): the interviewer challenges wrong
-claims by name, digs into thin answers, moves to new ground once satisfied
-rather than working down a list, and self-terminates in the closing phase
-with time still on the clock rather than running past it. Two real bugs
-turned up in that pass and were fixed - a topic could get re-asked
-indefinitely if the candidate kept dodging it (`notes.py`'s
-`topic_exhausted` now has a deterministic guarantee, not just a model
+The full loop - research → conversation → end-of-interview scorecard - has
+been run end to end against a live bridge: the interviewer challenges
+wrong claims by name, digs into thin answers, moves to new ground once
+satisfied rather than working down a list, and wraps itself up rather than
+running on. Two real bugs turned up in that pass and were fixed - a topic
+could get re-asked indefinitely if the candidate kept dodging it
+(`topic_exhausted` now has a deterministic guarantee, not just a model
 judgment call), and a confidently wrong claim could get half-credited as a
 strength in the scorecard (`scorecard.py`'s prompt now has an explicit
 worked example for exactly that case). Typed interview and dictation are
 verified working; a fully spoken interview (the interviewer talking back
 through TTS) isn't built - `pipeline.py`'s mic path only turns speech into
-the answer box's text, same as before this change.
+the answer box's text.
+
+The multi-agent split (`agent.py`, `questionnaire.py`, `gateway.py`,
+`evaluator.py`) is built and unit-tested per component - the guardrails on
+the main agent are verified individually - but the `coordinator: agent`
+path has not yet been run against a live bridge for a whole interview, and
+the résumé gateway's brief quality hasn't been eyeballed on a real résumé.
+Both are the next thing to do: flip `interviewer.coordinator` and diff two
+`tools/quality_check.py hostile` transcripts.
 
 What hasn't been exercised with a *real* Tavily key is whether the
 research it returns is actually good - the code path (search → digest →
