@@ -24,6 +24,12 @@ interviewer:
   # stronger model than the one asking questions. Must be served by the
   # same provider above. Leave blank to just reuse `model`.
   scorer_model: gpt-4.1-mini
+  # When the fast read calls an answer WRONG, take a second focused opinion
+  # on scorer_model before that counts against the candidate. Challenging
+  # someone over a claim that was actually fine is the worst thing this can
+  # do - it wastes a turn, reads as broken, and poisons the scorecard. Costs
+  # one extra call, and only on answers actually flagged wrong.
+  double_check_wrong: true
   # How many prior turns (question+answer pairs, not messages) stay in the
   # LLM context. Too small and cross-questioning loses the thread; too large
   # and the model spends its window rereading a whole interview each turn.

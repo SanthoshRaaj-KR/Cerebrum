@@ -82,6 +82,13 @@ class Settings:
         return str(self.interviewer.get("scorer_model", "") or self.model)
 
     @property
+    def double_check_wrong(self) -> bool:
+        """Whether a `wrong` read gets a second, focused opinion before it
+        counts against the candidate. Telling someone they're wrong when
+        they're right is the worst failure this system has."""
+        return bool(self.interviewer.get("double_check_wrong", True))
+
+    @property
     def llm_api_key(self) -> str:
         """The key for whichever provider is selected."""
         return (

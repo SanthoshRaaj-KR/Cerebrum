@@ -29,6 +29,7 @@ from interview_agent.llm import client
 logger = logging.getLogger("interview_agent.evaluator")
 
 MAX_TOKENS = 450
+VERIFY_MAX_TOKENS = 250
 
 _READS = ("strong", "thin", "wrong", "dodged", "dont_know")
 
@@ -162,6 +163,78 @@ claim is `wrong` - do not let delivery carry it.
 """
 
 
+_VERIFY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "actually_wrong": {"type": "boolean"},
+        "reason": {"type": "string"},
+    },
+    "required": ["actually_wrong", "reason"],
+    "additionalProperties": False,
+}
+
+_VERIFY_PROMPT = """\
+A first pass over this interview answer flagged it as containing an
+incorrect technical claim. You are the check on that call, and the check
+matters: telling a candidate they are wrong when they are right is worse
+than letting a small imprecision through.
+
+{rubric}
+
+What the first pass flagged:
+{gap}
+
+Decide whether the answer really does contain a claim that is factually
+wrong.
+
+- actually_wrong: true only if there is a claim here a competent engineer
+  would say "no, that's not how it works" to. An answer that is vague,
+  incomplete, simplified, or loosely worded while being fundamentally
+  right is NOT wrong. A reasonable simplification from an entry-level
+  candidate is NOT wrong. An honest "I don't know" is NOT wrong.
+- reason: one short line. If it is wrong, name the specific claim and what
+  is actually true. If it is not, say what the first pass mis-flagged.
+"""
+
+
+async def _verify_wrong(
+    question: str, answer: str, gap: str, rubric: Rubric
+) -> tuple[bool, str]:
+    """Second opinion on a `wrong` read, on the stronger model. Returns
+    (still wrong?, reason). On any failure it keeps the original call -
+    the first pass did flag something, and this check exists to catch
+    false accusations, not to erase real ones."""
+    try:
+        completion = await client().chat.completions.create(
+            model=settings.scorer_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": _VERIFY_PROMPT.format(rubric=rubric.render(), gap=gap or "(unspecified)"),
+                },
+                {
+                    "role": "user",
+                    "content": f"QUESTION:\n{question}\n\nANSWER:\n{answer}",
+                },
+            ],
+            max_tokens=VERIFY_MAX_TOKENS,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "wrong_check",
+                    "schema": _VERIFY_SCHEMA,
+                    "strict": True,
+                },
+            },
+        )
+        payload = json.loads(completion.choices[0].message.content or "{}")
+    except Exception:  # noqa: BLE001
+        logger.exception("could not double-check a 'wrong' read")
+        return True, gap
+
+    return bool(payload.get("actually_wrong", True)), str(payload.get("reason", "")).strip()
+
+
 async def read(
     question: str,
     answer: str,
@@ -220,6 +293,21 @@ async def read(
     # history) after the model re-asked the same question three times
     # without it - it must not depend on the model reliably reasoning about
     # a previous turn it can't see in this isolated call.
+    gap = str(payload.get("gap", "")).strip()
+
+    # A `wrong` read is the one call that gets challenged to the candidate's
+    # face, so it gets a second opinion on the stronger model before it
+    # counts. Only fires on answers actually flagged wrong.
+    if read_value == "wrong" and settings.double_check_wrong:
+        still_wrong, reason = await _verify_wrong(question, answer, gap, rubric)
+        if not still_wrong:
+            logger.info("double-check cleared a 'wrong' read: %s", reason)
+            # It was on-topic and not incorrect - shallow at worst.
+            read_value = "thin"
+            gap = reason
+        elif reason:
+            gap = reason
+
     topic_exhausted = bool(payload.get("topic_exhausted", False)) or (
         prior_read in _PRIOR_WEAK and read_value in _PRIOR_WEAK
     )
@@ -234,7 +322,7 @@ async def read(
         topic_exhausted=topic_exhausted,
         thread=str(payload.get("thread", "")).strip(),
         focus=focus,
-        gap=str(payload.get("gap", "")).strip(),
+        gap=gap,
     )
 
 
