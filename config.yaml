@@ -39,12 +39,15 @@ interviewer:
     - ai_engineer
 
 interview:
-  # There's no question count any more - the interview runs on a clock,
-  # like a real one. It opens easy, spends most of the middle on
-  # substance, pushes hardest near the end, then wraps up because time is
-  # gone. Overridable per session (tools/quality_check.py uses this so a
-  # scripted run doesn't take 40 real minutes).
-  duration_minutes: 40
+  # No clock and no fixed question list. The interview runs until every
+  # competency in the role brief has a read - shown at thin-or-better, or
+  # pushed until the edge of what the candidate knows was found - then it
+  # wraps up. These two bounds are the floor and ceiling on that: it won't
+  # stop before min_questions even if coverage looks done early, and it
+  # always wraps by max_questions. max_questions is overridable per session
+  # (tools/quality_check.py uses this to keep scripted runs short).
+  min_questions: 8
+  max_questions: 22
 
 research:
   # Before the interview starts, the candidate's target role is researched

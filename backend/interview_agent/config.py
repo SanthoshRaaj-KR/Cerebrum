@@ -89,11 +89,17 @@ class Settings:
         return list(self.interviewer.get("modes", []))
 
     @property
-    def duration_minutes(self) -> int:
-        # Below 10 there's barely an interview; above 90 nothing here is
-        # tuned for it (history window, research brief size). Overridable
-        # per session via the start payload - see bridge.start_session.
-        return max(10, min(90, int(self.interview.get("duration_minutes", 40))))
+    def min_questions(self) -> int:
+        # The interview won't wrap up before this many questions even if
+        # coverage looks complete early.
+        return max(1, int(self.interview.get("min_questions", 8)))
+
+    @property
+    def max_questions(self) -> int:
+        # Hard ceiling: the interview always wraps by here regardless of
+        # coverage. Overridable per session via the start payload (the
+        # quality-check harness uses it) - see bridge.start_session.
+        return max(self.min_questions, int(self.interview.get("max_questions", 22)))
 
     @property
     def research_enabled(self) -> bool:

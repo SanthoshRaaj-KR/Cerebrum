@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import styles from "./page.module.css";
 import {
-  Clock,
   Mode,
   SessionState,
   SystemInfo,
@@ -18,34 +17,6 @@ import {
 import { MicSession, MicStatus } from "@/lib/webrtc";
 
 type Stage = "setup" | "interview" | "report";
-
-// Mirrors clock.py's phase boundaries, so the countdown and phase label
-// keep ticking smoothly between the answers that actually refresh `clock`
-// from the backend, instead of freezing until the next response arrives.
-const OPENING_END = 0.12;
-const CORE_END = 0.6;
-const DEPTH_END = 0.88;
-
-const PHASE_LABEL: Record<Clock["phase"], string> = {
-  opening: "Opening",
-  core: "Core",
-  depth: "Depth",
-  closing: "Closing",
-};
-
-function livePhase(fraction: number): Clock["phase"] {
-  if (fraction < OPENING_END) return "opening";
-  if (fraction < CORE_END) return "core";
-  if (fraction < DEPTH_END) return "depth";
-  return "closing";
-}
-
-function formatClock(seconds: number): string {
-  const s = Math.max(0, Math.round(seconds));
-  const m = Math.floor(s / 60);
-  const rest = s % 60;
-  return `${m}:${rest.toString().padStart(2, "0")}`;
-}
 
 const VERDICT_LABEL: Record<Scorecard["verdict"], string> = {
   strong_yes: "Strong yes",
@@ -82,11 +53,6 @@ export default function Home() {
   const [interim, setInterim] = useState("");
   const micRef = useRef<MicSession | null>(null);
 
-  // Ticks once a second while an interview is live, so the countdown moves
-  // smoothly between the answers that actually refresh `clock` from the
-  // backend rather than jumping only when a request completes.
-  const [now, setNow] = useState(() => Date.now() / 1000);
-
   useEffect(() => {
     getHealth()
       .then((data) => setSystem(data.system))
@@ -95,20 +61,9 @@ export default function Home() {
     return () => micRef.current?.stop();
   }, []);
 
-  useEffect(() => {
-    if (stage !== "interview") return;
-    const id = setInterval(() => setNow(Date.now() / 1000), 1000);
-    return () => clearInterval(id);
-  }, [stage]);
-
   const current = session?.turns[session.turns.length - 1] ?? null;
   const awaitingAnswer = !!current && current.answer === null;
-
-  const clock = session?.clock ?? null;
-  const elapsed = clock ? Math.max(0, now - clock.startedAt) : 0;
-  const remaining = clock ? Math.max(0, clock.durationSeconds - elapsed) : 0;
-  const fraction = clock && clock.durationSeconds > 0 ? Math.min(1, elapsed / clock.durationSeconds) : 0;
-  const phase = clock ? livePhase(fraction) : "opening";
+  const pacing = session?.pacing ?? null;
 
   async function handleResumeFile(file: File | undefined) {
     if (!file) return;
@@ -134,7 +89,6 @@ export default function Home() {
       setSession(state);
       setReport(null);
       setAnswer("");
-      setNow(Date.now() / 1000);
       setStage("interview");
     } catch (err) {
       setError(err instanceof Error ? err.message : "could not start the interview");
@@ -219,7 +173,7 @@ export default function Home() {
           <h1>Cerebrum</h1>
           {system && (
             <p className={styles.meta}>
-              {system.model} · {system.durationMinutes}-minute interview ·{" "}
+              {system.model} · up to {system.maxQuestions} questions ·{" "}
               {system.fresher ? "fresher calibration" : "experienced calibration"}
             </p>
           )}
@@ -430,16 +384,14 @@ export default function Home() {
       <aside className={styles.sidebar}>
         <h2 className={styles.sidebarTitle}>{session.mode.name}</h2>
 
-        <div className={styles.clockBlock}>
-          <span className={styles.clockTime}>{formatClock(remaining)}</span>
-          <span className={styles.clockPhase}>{PHASE_LABEL[phase]}</span>
-          <div className={styles.clockTrack}>
-            <div
-              className={styles.clockFill}
-              style={{ width: `${Math.round(fraction * 100)}%` }}
-            />
+        {pacing && (
+          <div className={styles.pacingBlock}>
+            <span className={styles.pacingCount}>
+              {pacing.closing ? "Wrapping up" : `Question ${pacing.questionsAsked}`}
+            </span>
+            <span className={styles.pacingHint}>of up to {pacing.maxQuestions}</span>
           </div>
-        </div>
+        )}
 
         {session.researchBrief && session.researchBrief.competencies.length > 0 && (
           <div className={styles.briefBlock}>

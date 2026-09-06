@@ -4,7 +4,7 @@
     python tools/quality_check.py                    # realistic mixed answers
     python tools/quality_check.py hostile            # wrong claims, does it push back?
     python tools/quality_check.py modes              # research brief + opener for every mode
-    python tools/quality_check.py hostile --minutes 5
+    python tools/quality_check.py hostile --max-questions 6
 
 Interview quality lives almost entirely in prompt wording, which means it
 regresses silently - a change that reads like an improvement can quietly
@@ -18,9 +18,9 @@ secure than GET", "indexes slow down the database"). If the transcript
 shows the interviewer moving politely to its next question, the reactive
 logic in interviewer.py has broken.
 
-`--minutes` overrides interview.duration_minutes for the session (default
-below) - the clock is wall-clock based, so a scripted run needs a short
-budget or it'll sit there for 40 real minutes waiting on itself.
+`--max-questions` overrides interview.max_questions for the session
+(default below) - there's no clock any more, but a scripted run of a dozen
+fixed answers doesn't need the full coverage-driven length either.
 """
 
 from __future__ import annotations
@@ -34,8 +34,10 @@ import urllib.request
 
 BASE = os.environ.get("INTERVIEW_AGENT_URL", "http://localhost:7332")
 
-DEFAULT_TEST_MINUTES = 3
-MAX_TEST_TURNS = 14
+DEFAULT_TEST_CAP = 10
+# Runaway guard only - the per-session maxQuestions cap should end things
+# well before this.
+MAX_TEST_TURNS = 30
 
 RESUME = """Santhosh Raaj K R - B.Tech Computer Science, 2025
 
@@ -122,11 +124,11 @@ def run(
     answers: list[str],
     label: str,
     resume: str = RESUME,
-    minutes: int = DEFAULT_TEST_MINUTES,
+    cap: int = DEFAULT_TEST_CAP,
 ) -> dict:
     post("/api/session/reset")
     print("=" * 76)
-    print(f"{label}   [{mode}]  ({minutes} min budget)")
+    print(f"{label}   [{mode}]  ({cap} question cap)")
     print("=" * 76)
 
     st = post(
@@ -136,7 +138,7 @@ def run(
             "role": "Backend Engineer",
             "level": "Fresher",
             "resume": resume,
-            "minutes": minutes,
+            "maxQuestions": cap,
         },
     )
     brief = st.get("researchBrief") or {}
@@ -153,14 +155,16 @@ def run(
         ans = answers[i] if i < len(answers) else "I'm not totally sure - could you clarify what you're after?"
         skipped = not ans
 
-        print(f"[{st['clock']['phase']}] Q{i + 1}  {turn['question']}")
+        pc = st["pacing"]
+        tag = "closing" if pc["closing"] else f"{pc['questionsAsked']}/{pc['maxQuestions']}"
+        print(f"[{tag}] Q{i + 1}  {turn['question']}")
         print(f"    A: {'(skipped)' if skipped else ans[:180]}\n")
 
         st = post("/api/session/answer", {"text": ans, "skipped": skipped})
         i += 1
 
     if i >= MAX_TEST_TURNS and not st["finished"]:
-        print(f"!! hit MAX_TEST_TURNS ({MAX_TEST_TURNS}) without the clock ending the interview\n")
+        print(f"!! hit MAX_TEST_TURNS ({MAX_TEST_TURNS}) without coverage ending the interview\n")
 
     rep = post("/api/session/report")
     sc = rep["scorecard"]
@@ -180,7 +184,7 @@ def run(
     return rep
 
 
-def survey(minutes: int = DEFAULT_TEST_MINUTES) -> None:
+def survey(cap: int = DEFAULT_TEST_CAP) -> None:
     """Research brief and opening question for every mode, to check they're
     actually different interviews rather than one wearing different hats,
     and that the opener is improvised rather than lifted verbatim from the
@@ -194,7 +198,7 @@ def survey(minutes: int = DEFAULT_TEST_MINUTES) -> None:
         post("/api/session/reset")
         st = post(
             "/api/session/start",
-            {"mode": m, "role": "Backend Engineer", "level": "Fresher", "resume": resume, "minutes": minutes},
+            {"mode": m, "role": "Backend Engineer", "level": "Fresher", "resume": resume, "maxQuestions": cap},
         )
         brief = st.get("researchBrief") or {}
         opener = st["turns"][0]["question"]
@@ -225,8 +229,8 @@ def live() -> None:
 
     role = input("  Target role  [Backend Engineer]: ").strip() or "Backend Engineer"
     level = input("  Level        [Fresher]: ").strip() or "Fresher"
-    minutes_raw = input("  Minutes      [40]: ").strip()
-    minutes = int(minutes_raw) if minutes_raw.isdigit() else 40
+    cap_raw = input("  Max questions [22]: ").strip()
+    cap = int(cap_raw) if cap_raw.isdigit() else 22
     print("  Résumé - paste it, then a blank line (or just press enter to skip):")
     lines: list[str] = []
     while True:
@@ -240,16 +244,15 @@ def live() -> None:
     post("/api/session/reset")
     st = post(
         "/api/session/start",
-        {"mode": mode["key"], "role": role, "level": level, "resume": resume, "minutes": minutes},
+        {"mode": mode["key"], "role": role, "level": level, "resume": resume, "maxQuestions": cap},
     )
 
     while not st["finished"]:
         turn = st["turns"][-1]
-        clock = st["clock"]
-        mins_left = int(clock["remainingSeconds"] // 60)
-        secs_left = int(clock["remainingSeconds"] % 60)
+        pc = st["pacing"]
+        tag = "wrapping up" if pc["closing"] else f"question {pc['questionsAsked']} of up to {pc['maxQuestions']}"
         print("=" * 72)
-        print(f"  [{clock['phase']}]  {mins_left}:{secs_left:02d} left\n")
+        print(f"  [{tag}]\n")
         print(f"  {turn['question']}\n")
         print("  Your answer - blank line to submit, or 'skip':")
 
@@ -286,13 +289,13 @@ def live() -> None:
 
 def main() -> int:
     args = sys.argv[1:]
-    minutes = DEFAULT_TEST_MINUTES
-    if "--minutes" in args:
-        idx = args.index("--minutes")
+    cap = DEFAULT_TEST_CAP
+    if "--max-questions" in args:
+        idx = args.index("--max-questions")
         try:
-            minutes = int(args[idx + 1])
+            cap = int(args[idx + 1])
         except (IndexError, ValueError):
-            print("--minutes needs an integer argument", file=sys.stderr)
+            print("--max-questions needs an integer argument", file=sys.stderr)
             return 1
         del args[idx : idx + 2]
 
@@ -319,12 +322,12 @@ def main() -> int:
             HOSTILE,
             "HOSTILE - every answer contains a claim that must be challenged",
             resume="B.Tech CS 2025. Built an e-commerce backend with Django and MongoDB.",
-            minutes=minutes,
+            cap=cap,
         )
     elif scenario == "modes":
-        survey(minutes=minutes)
+        survey(cap=cap)
     else:
-        run("sde_backend", REALISTIC, "REALISTIC - mixed-quality answers", minutes=minutes)
+        run("sde_backend", REALISTIC, "REALISTIC - mixed-quality answers", cap=cap)
 
     post("/api/session/reset")
     return 0

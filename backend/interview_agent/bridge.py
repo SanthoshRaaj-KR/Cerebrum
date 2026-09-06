@@ -51,7 +51,7 @@ def system_info() -> dict[str, Any]:
     return {
         "model": settings.model,
         "fresher": settings.fresher,
-        "durationMinutes": settings.duration_minutes,
+        "maxQuestions": settings.max_questions,
         "modes": [
             {"key": m.key, "name": m.name, "blurb": m.blurb, "dims": list(m.dims)}
             for m in (prompts.get(k) for k in settings.modes)
@@ -69,7 +69,11 @@ def _session_state(session: interviewer_mod.InterviewSession) -> dict:
         "role": session.candidate.role,
         "level": session.candidate.level,
         "finished": session.finished,
-        "clock": session.clock.to_dict() if session.clock else None,
+        "pacing": {
+            "questionsAsked": len(session.turns),
+            "maxQuestions": session.question_cap,
+            "closing": session.closing,
+        },
         "turns": [t.to_dict() for t in session.turns],
         "researchBrief": (
             {
@@ -141,11 +145,11 @@ async def start_session(body: dict) -> dict:
         level=str(body.get("level", "")).strip(),
         resume=str(body.get("resume", "")).strip(),
     )
-    # Minutes overridable per session - the web console never sends this
-    # (it always wants the configured 40), but tools/quality_check.py does,
-    # so a scripted run doesn't have to wait out a real 40 minutes.
-    minutes_raw = body.get("minutes")
-    minutes = int(minutes_raw) if isinstance(minutes_raw, (int, float)) and minutes_raw else None
+    # Question ceiling overridable per session - the web console never sends
+    # this (it wants the configured max), but tools/quality_check.py does,
+    # to keep scripted runs short.
+    cap_raw = body.get("maxQuestions")
+    max_questions = int(cap_raw) if isinstance(cap_raw, (int, float)) and cap_raw else None
 
     try:
         session = interviewer_mod.InterviewSession(mode_key=mode_key, candidate=candidate)
@@ -153,7 +157,7 @@ async def start_session(body: dict) -> dict:
         raise HTTPException(400, str(exc)) from exc
 
     try:
-        await session.start(duration_minutes=minutes)
+        await session.start(max_questions=max_questions)
     except Exception as exc:  # noqa: BLE001
         logger.exception("could not start interview session")
         raise HTTPException(502, f"could not start interview: {exc}") from exc
@@ -242,7 +246,7 @@ def main() -> None:
     print(f"\n  Cerebrum bridge on http://{HOST}:{PORT}")
     print(f"  model  {info['model']}   fresher  {str(info['fresher']).lower()}")
     print(f"  modes  {', '.join(m['name'] for m in info['modes'])}")
-    print(f"  {info['durationMinutes']} minutes per session\n")
+    print(f"  up to {info['maxQuestions']} questions per session\n")
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
 
 

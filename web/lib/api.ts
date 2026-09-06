@@ -15,7 +15,7 @@ export type Mode = {
 export type SystemInfo = {
   model: string;
   fresher: boolean;
-  durationMinutes: number;
+  maxQuestions: number;
   modes: Mode[];
 };
 
@@ -25,13 +25,14 @@ export type Turn = {
   skipped: boolean;
 };
 
-export type Clock = {
-  startedAt: number;
-  durationSeconds: number;
-  elapsedSeconds: number;
-  remainingSeconds: number;
-  phase: "opening" | "core" | "depth" | "closing";
-  expired: boolean;
+/** Replaces the old clock. There's no timer any more - the interview runs
+ * on coverage of the role's competencies, so all the UI shows is where it
+ * is in that: how many questions in, the ceiling, and whether it's
+ * wrapping up. Nothing here is evaluative. */
+export type Pacing = {
+  questionsAsked: number;
+  maxQuestions: number;
+  closing: boolean;
 };
 
 export type ResearchBrief = {
@@ -46,7 +47,7 @@ export type SessionState = {
   role: string;
   level: string;
   finished: boolean;
-  clock: Clock | null;
+  pacing: Pacing;
   turns: Turn[];
   researchBrief: ResearchBrief | null;
 };
@@ -100,9 +101,9 @@ export async function startSession(body: {
   role: string;
   level: string;
   resume: string;
-  /** Overrides interview.duration_minutes for this session. The console
-   * never sends this - it's for the quality-check harness. */
-  minutes?: number;
+  /** Overrides interview.max_questions for this session. The console never
+   * sends this - it's for the quality-check harness, to keep runs short. */
+  maxQuestions?: number;
 }): Promise<SessionState> {
   return asJson(
     await fetch(`${BRIDGE_URL}/api/session/start`, {

@@ -391,7 +391,10 @@ def check_roles_and_modes() -> None:
         _fail("no modes configured")
     else:
         print(f"{OK} {len(settings.modes)} mode(s): {', '.join(settings.modes)}")
-    print(f"{OK} interview length: {settings.duration_minutes} minutes")
+    print(
+        f"{OK} interview length: {settings.min_questions}-{settings.max_questions}"
+        " questions (coverage-driven, no clock)"
+    )
 
 
 def _run(check) -> None:
