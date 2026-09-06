@@ -126,10 +126,6 @@ export async function submitAnswer(
   );
 }
 
-export async function getSession(): Promise<{ session: SessionState | null }> {
-  return asJson(await fetch(`${BRIDGE_URL}/api/session`));
-}
-
 /** Ends the interview and returns the state plus the scorecard - the first
  * and only point anything evaluative reaches the candidate. */
 export async function getReport(): Promise<SessionReport> {

@@ -185,13 +185,6 @@ async def submit_answer(body: dict) -> dict:
     return _session_state(_session)
 
 
-@app.get("/api/session")
-async def get_session() -> dict:
-    if _session is None:
-        return {"session": None}
-    return {"session": _session_state(_session)}
-
-
 @app.post("/api/session/report")
 async def session_report() -> dict:
     """The end-of-session scorecard. Marks the interview finished so no
