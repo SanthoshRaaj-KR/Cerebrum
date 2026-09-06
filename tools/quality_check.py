@@ -231,14 +231,18 @@ def live() -> None:
     level = input("  Level        [Fresher]: ").strip() or "Fresher"
     cap_raw = input("  Max questions [22]: ").strip()
     cap = int(cap_raw) if cap_raw.isdigit() else 22
-    print("  Résumé - paste it, then a blank line (or just press enter to skip):")
-    lines: list[str] = []
-    while True:
-        line = input()
-        if not line:
-            break
-        lines.append(line)
-    resume = "\n".join(lines)
+    print("  Résumé - paste it, then a blank line (required):")
+    resume = ""
+    while not resume.strip():
+        lines: list[str] = []
+        while True:
+            line = input()
+            if not line:
+                break
+            lines.append(line)
+        resume = "\n".join(lines)
+        if not resume.strip():
+            print("  ...a résumé is required now. Paste one:")
 
     print(f"\n  Reading up on what {role} interviews actually cover...\n")
     post("/api/session/reset")

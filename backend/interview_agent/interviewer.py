@@ -19,16 +19,18 @@ Nothing evaluative is ever computed or shown mid-interview.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 
-from interview_agent import notes, prompts, research
+from interview_agent import notes, prompts, research, resume
 from interview_agent.config import settings
 from interview_agent.context import CandidateContext
 from interview_agent.llm import client
 from interview_agent.notes import AnswerNote, CoverageLedger
 from interview_agent.prompts import Mode
 from interview_agent.research import RoleBrief
+from interview_agent.resume import ResumeDigest
 
 logger = logging.getLogger("interview_agent.interviewer")
 
@@ -45,6 +47,8 @@ questions in one turn.
 {level_note}
 
 {mode_prompt}
+
+{resume_digest}
 
 {role_research}
 
@@ -162,6 +166,7 @@ class InterviewSession:
     candidate: CandidateContext
     mode: Mode = field(init=False)
     brief: RoleBrief | None = None
+    resume_digest: ResumeDigest | None = None
     turns: list[Turn] = field(default_factory=list)
     ledger: CoverageLedger = field(default_factory=CoverageLedger)
     finished: bool = False
@@ -176,7 +181,12 @@ class InterviewSession:
     # -- setup --------------------------------------------------------------
 
     async def start(self, max_questions: int | None = None) -> Turn:
-        self.brief = await research.build_brief(self.candidate, self.mode)
+        # Independent prep work, both non-raising - run them together so a
+        # session start is one round-trip's wait, not two.
+        self.brief, self.resume_digest = await asyncio.gather(
+            research.build_brief(self.candidate, self.mode),
+            resume.digest(self.candidate.resume),
+        )
         self.turns = []
         self.ledger = CoverageLedger()
         self.finished = False
@@ -218,6 +228,7 @@ class InterviewSession:
         return BASE_INSTRUCTIONS.format(
             level_note=_FRESHER_NOTE if settings.fresher else _EXPERIENCED_NOTE,
             mode_prompt=prompts.mode_prompt(self.mode_key, self.candidate),
+            resume_digest=self.resume_digest.render() if self.resume_digest else "",
             role_research=self.brief.render() if self.brief else "",
             coverage_block=self.ledger.render(self._competency_names()),
         )

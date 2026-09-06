@@ -81,6 +81,10 @@ export default function Home() {
 
   async function handleStart() {
     if (!mode) return;
+    if (!resume.trim()) {
+      setError("Add your résumé first - the interview is built around it.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -227,8 +231,8 @@ export default function Home() {
           <label className={styles.field}>
             Résumé
             <span className={styles.hint}>
-              Paste it, or drop in a PDF. Optional, but the questions get a lot
-              more specific with it.
+              Paste it, or drop in a PDF. Required - the interview is built
+              around it, digested before the first question.
             </span>
             <textarea
               rows={8}
@@ -248,7 +252,7 @@ export default function Home() {
           <button
             className={styles.primary}
             onClick={handleStart}
-            disabled={busy || !mode || !!bridgeError}
+            disabled={busy || !mode || !resume.trim() || !!bridgeError}
           >
             {busy ? `Reading up on ${role || "this role"}'s interviews...` : "Start interview"}
           </button>

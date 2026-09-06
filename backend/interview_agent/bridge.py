@@ -145,6 +145,10 @@ async def start_session(body: dict) -> dict:
         level=str(body.get("level", "")).strip(),
         resume=str(body.get("resume", "")).strip(),
     )
+    # The interview is built around the candidate's actual résumé now - it's
+    # digested at start and every round leans on it. No résumé, no session.
+    if not candidate.resume:
+        raise HTTPException(400, "a résumé is required to start an interview")
     # Question ceiling overridable per session - the web console never sends
     # this (it wants the configured max), but tools/quality_check.py does,
     # to keep scripted runs short.
