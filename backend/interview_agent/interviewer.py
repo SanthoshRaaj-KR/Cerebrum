@@ -350,9 +350,8 @@ class InterviewSession:
         current.answer = "" if skipped else text.strip()
         current.skipped = skipped or not current.answer
 
-        prior_read = ""
-        if len(self.turns) > 1 and self.turns[-2].note is not None:
-            prior_read = self.turns[-2].note.read  # type: ignore[union-attr]
+        prev_note = self.turns[-2].note if len(self.turns) > 1 else None
+        prior_read = prev_note.read if prev_note is not None else ""
 
         current.note = await notes.take(
             current.question,
@@ -361,11 +360,21 @@ class InterviewSession:
             self._competency_names(),
             prior_read,
         )
+        # notes.take's "two weak in a row" guard keys off prior_read, which
+        # is the previous answer whatever its topic. Only let that retire a
+        # competency in the ledger when the previous answer was on the SAME
+        # focus - otherwise a rough patch across different areas would settle
+        # competencies that were each only asked once.
+        same_focus = bool(
+            current.note.focus
+            and prev_note is not None
+            and prev_note.focus == current.note.focus
+        )
         self.ledger.record(
             current.note.evidenced,
             notes.strength_of(current.note.read),
             focus=current.note.focus,
-            exhausted=current.note.topic_exhausted,
+            exhausted=current.note.topic_exhausted and same_focus,
         )
 
         if self._final_turn_sent or len(self.turns) >= self.question_cap:

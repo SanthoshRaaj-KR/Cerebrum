@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable
 
 import httpx
 
@@ -89,7 +89,7 @@ async def _tavily(queries: list[str], max_results: int) -> list[SearchHit]:
                         content=str(res.get("content", "") or ""),
                     )
                 )
-    if errors == len(queries):
+    if queries and errors == len(queries):
         raise SearchProviderError("every tavily query failed")
     return hits
 
@@ -128,7 +128,7 @@ async def _brave(queries: list[str], max_results: int) -> list[SearchHit]:
                         content=_TAG_RE.sub("", str(res.get("description", "") or "")),
                     )
                 )
-    if errors == len(queries):
+    if queries and errors == len(queries):
         raise SearchProviderError("every brave query failed")
     return hits
 
