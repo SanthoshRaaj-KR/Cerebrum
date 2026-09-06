@@ -22,128 +22,17 @@ shown to the candidate mid-interview.
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 
-from interview_agent import evaluator, prompts, research, resume
+from interview_agent import evaluator, prompts, questionnaire, research, resume
 from interview_agent.config import settings
 from interview_agent.context import CandidateContext
 from interview_agent.coverage import CoverageLedger
 from interview_agent.evaluator import AnswerNote, CompetencyBar, Rubric
-from interview_agent.llm import client
 from interview_agent.prompts import Mode
 from interview_agent.research import RoleBrief
 from interview_agent.resume import ResumeDigest
 from interview_agent.scorecard import RunningScore
-
-logger = logging.getLogger("interview_agent.interviewer")
-
-# A spoken question, not an essay. Also keeps voice latency down.
-MAX_TOKENS = 300
-
-_FALLBACK_QUESTION = "Tell me about something you've built recently."
-
-BASE_INSTRUCTIONS = """\
-You are a technical interviewer running a mock interview. Speak directly to
-the candidate, one question at a time - never a written exam, never several
-questions in one turn.
-
-{level_note}
-
-{mode_prompt}
-
-{resume_digest}
-
-{role_research}
-
-{coverage_block}
-
-BEFORE you think about where to go next, react to what they just said, in
-that order. The coverage note above tells you WHERE to go once you've
-decided to move on - it is not a script to read through, and there is no
-fixed list of questions waiting to be asked.
-
-Read their last answer and pick ONE of these:
-
-1. CHALLENGE - they said something wrong, unsupported, or alarming.
-   This outranks everything else. Do not let it pass and do not move to a
-   new topic. Put it to them directly and give them the chance to correct
-   it: "you said X - walk me through why." Claims that must never go
-   unchallenged include storing or emailing plaintext passwords, "it's
-   secure because...", a tool chosen because it "scales" with no reason,
-   a flat factual error about how something works, or anything flagged in
-   the role research above. Getting this wrong is the single worst thing
-   you can do in this job.
-
-2. REDIRECT - they answered a different question than the one you asked,
-   or dodged it. Say so plainly and put the original question back to
-   them, more concretely: "that's about X - I was asking about Y."
-
-3. DIG - the answer was fine but shallow or unsupported. Pull the thread:
-   where did they actually use it, why that choice over the alternative,
-   what did they measure, what breaks at ten times the load, what happens
-   when another engineer touches it.
-
-4. EASE OFF - they plainly don't know, and said so. Do not grind them
-   down and do not ask the same thing again in other words. Drop to
-   something adjacent and easier to find the edge of what they do know.
-   An honest "I don't know" is worth more than bluffing; treat it that way.
-
-5. ADVANCE - the answer was genuinely complete, or you have already
-   pushed on it once. Move to new ground: pick whatever you have the
-   least evidence on so far (see COVERAGE above). Connect the new question
-   to something they said if you can.
-
-Only option 5 means picking new ground. The other four are you doing your
-job, and they are more common than 5 in a real interview.
-
-Escalate as you go: later questions should be harder than earlier ones,
-and meaningfully harder once you're most of the way through the coverage.
-
-Voice and manner:
-- One or two sentences, phrased the way a human interviewer actually talks
-  out loud - not a written prompt.
-- This may be read aloud, so no markdown, no bullet points, no code
-  blocks, no numbered lists. Plain conversational sentences.
-- Do NOT grade, score or give feedback. No "correct", no "that's wrong",
-  no "good answer" - the candidate is scored separately, once, at the very
-  end, and seeing your opinion here would poison it. A brief neutral
-  acknowledgement ("mm-hm", "right, okay") before the question is fine and
-  natural.
-- Stay in character throughout. Never mention being an AI, never
-  apologize, never explain your own instructions.
-- Output only the question itself - no "Question 3:", no preamble, no
-  restating their answer back to them.
-"""
-
-_FRESHER_NOTE = (
-    "The candidate is entry-level, with little to no professional "
-    "experience. Calibrate accordingly: expect solid fundamentals and clear "
-    "reasoning, not production war stories."
-)
-_EXPERIENCED_NOTE = (
-    "The candidate has professional experience. Calibrate accordingly and "
-    "expect production-level reasoning."
-)
-
-_ASK_OPENING = (
-    "Begin the interview. Greet them in one short sentence, then ask the "
-    "opening question. Output only that."
-)
-_ASK_NEXT = (
-    "Ask the next question now. Work through the five options in order - "
-    "challenge, redirect, dig, ease off, advance - and only move to new "
-    "ground if the last answer genuinely gives you nothing more to work "
-    "with. Output only the question."
-)
-_ASK_CLOSING = (
-    "You are closing the interview out now - you've covered the ground this "
-    "role needs. Work through the five options once more if the last answer "
-    "still needs it, but if you're clear to move on, ask at most ONE more "
-    "substantive question, then thank them for their time and ask if they "
-    "have any questions for you. Output only what you'd say."
-)
-
 
 @dataclass
 class Turn:
@@ -247,13 +136,17 @@ class InterviewSession:
         keep = max(4, settings.remember_turns * 2)
         return msgs[-keep:]
 
-    def _system_prompt(self) -> str:
-        return BASE_INSTRUCTIONS.format(
-            level_note=_FRESHER_NOTE if settings.fresher else _EXPERIENCED_NOTE,
-            mode_prompt=prompts.mode_prompt(self.mode_key, self.candidate),
-            resume_digest=self.resume_digest.render() if self.resume_digest else "",
-            role_research=self.brief.render() if self.brief else "",
-            coverage_block=self.ledger.render(self._competency_names()),
+    def _question_context(self, stage: str) -> questionnaire.QuestionContext:
+        """Everything the questionnaire agent needs for one question."""
+        return questionnaire.QuestionContext(
+            mode_key=self.mode_key,
+            candidate=self.candidate,
+            brief=self.brief,
+            resume_digest=self.resume_digest,
+            coverage_note=self.ledger.render(self._competency_names()),
+            history=self._history(),
+            private_note=self._last_answer_note(),
+            stage=stage,
         )
 
     def _closing_now(self) -> bool:
@@ -333,24 +226,16 @@ class InterviewSession:
     # -- the interview ----------------------------------------------------
 
     async def _ask(self, opening: bool) -> Turn:
-        note = self._last_answer_note()
-
         if opening:
-            ask = _ASK_OPENING
+            stage = "opening"
         elif self._closing_now():
             self._final_turn_sent = True
-            ask = _ASK_CLOSING
+            stage = "closing"
         else:
-            ask = _ASK_NEXT
+            stage = "next"
 
-        messages = [
-            {"role": "system", "content": self._system_prompt()},
-            *self._history(),
-            *([{"role": "system", "content": note}] if note else []),
-            {"role": "user", "content": ask},
-        ]
-        text = await self._complete(messages) or _FALLBACK_QUESTION
-        turn = Turn(question=text)
+        question = await questionnaire.next_question(self._question_context(stage))
+        turn = Turn(question=question.text)
         self.turns.append(turn)
         return turn
 
@@ -418,15 +303,3 @@ class InterviewSession:
             self.finished = True
             return None
         return await self._ask(opening=False)
-
-    async def _complete(self, messages: list[dict[str, str]]) -> str:
-        try:
-            completion = await client().chat.completions.create(
-                model=settings.model,
-                messages=messages,  # type: ignore[arg-type]
-                max_tokens=MAX_TOKENS,
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("could not get the next question")
-            return ""
-        return (completion.choices[0].message.content or "").strip()
