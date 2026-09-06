@@ -24,6 +24,14 @@ interviewer:
   # stronger model than the one asking questions. Must be served by the
   # same provider above. Leave blank to just reuse `model`.
   scorer_model: gpt-4.1-mini
+  # Who drives a turn. `code` is the deterministic loop: read the answer,
+  # apply the reactive ladder, ask. `agent` is the LLM main agent in
+  # agent.py, which calls the evaluator and the questionnaire as tools and
+  # decides the move in between - more faithful to a real interviewer's
+  # judgement, but ~3 extra model round-trips per question. Either way the
+  # question cap, the coverage ledger and the background scorer are
+  # enforced in code, and the agent never writes to the candidate.
+  coordinator: code
   # When the fast read calls an answer WRONG, take a second focused opinion
   # on scorer_model before that counts against the candidate. Challenging
   # someone over a claim that was actually fine is the worst thing this can

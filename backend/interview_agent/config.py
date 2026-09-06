@@ -82,6 +82,14 @@ class Settings:
         return str(self.interviewer.get("scorer_model", "") or self.model)
 
     @property
+    def coordinator(self) -> str:
+        """Who drives a turn: 'agent' runs the LLM main agent with
+        tool-calling (agent.py), 'code' runs the deterministic loop in
+        interviewer.py. Both enforce the same invariants in code - the
+        agent only ever chooses intent and target."""
+        return str(self.interviewer.get("coordinator", "code")).strip().lower()
+
+    @property
     def double_check_wrong(self) -> bool:
         """Whether a `wrong` read gets a second, focused opinion before it
         counts against the candidate. Telling someone they're wrong when

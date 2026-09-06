@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
-from interview_agent import evaluator, prompts, questionnaire, research, resume
+from interview_agent import agent, evaluator, prompts, questionnaire, research, resume
 from interview_agent.config import settings
 from interview_agent.context import CandidateContext
 from interview_agent.coverage import CoverageLedger
@@ -263,13 +263,26 @@ class InterviewSession:
         prev_note = self.turns[-2].note if len(self.turns) > 1 else None
         prior_read = prev_note.read if prev_note is not None else ""
 
-        current.note = await evaluator.read(
-            current.question,
-            current.answer,
-            current.skipped,
-            self._rubric(),
-            prior_read,
-        )
+        # Either the LLM main agent drives this turn (it calls the evaluator
+        # and picks the move), or the deterministic path does. The
+        # invariants below run identically for both - the agent is not
+        # trusted with the ledger, the cap, or the background scorer.
+        decision = None
+        if settings.coordinator == "agent":
+            closing = self._closing_now()
+            decision = await agent.run_turn(self, current, closing)
+            if closing and not decision.fell_back:
+                self._final_turn_sent = True
+            current.note = decision.note
+
+        if current.note is None:
+            current.note = await evaluator.read(
+                current.question,
+                current.answer,
+                current.skipped,
+                self._rubric(),
+                prior_read,
+            )
         # evaluator.read's "two weak in a row" guard keys off prior_read, which
         # is the previous answer whatever its topic. Only let that retire a
         # competency in the ledger when the previous answer was on the SAME
@@ -299,7 +312,21 @@ class InterviewSession:
             rubric=self._rubric(),
         )
 
+        # The cap and the wrap-up turn are code's call, not the agent's: if
+        # it produced a question past the ceiling, that question is dropped.
         if self._final_turn_sent or len(self.turns) >= self.question_cap:
             self.finished = True
             return None
+
+        if decision is not None and not decision.fell_back:
+            # end_interview is only honoured once there's been a real
+            # interview - the agent doesn't get to bail out at question two.
+            if decision.ended and len(self.turns) >= settings.min_questions:
+                self.finished = True
+                return None
+            if decision.question:
+                turn = Turn(question=decision.question)
+                self.turns.append(turn)
+                return turn
+
         return await self._ask(opening=False)
