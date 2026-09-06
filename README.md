@@ -170,17 +170,18 @@ From there, `interviewer.py` composes one system prompt per turn from: a
 fixed reactive ladder (challenge a wrong claim / redirect a dodge / dig
 into a thin answer / ease off an honest "I don't know" / only then advance
 to new ground), the mode's own focus (`prompts/sde_backend.py` etc.), the
-role brief, and two things that change every turn - `clock.py`'s phase
-guidance (opening → core → depth → closing, driven by elapsed wall time,
-not a turn count) and `notes.py`'s coverage ledger (which competencies
-still have nothing shown, so "advance" means picking real gaps, not the
-next line of a script).
+role brief, and `coverage.py`'s ledger, which changes every turn (which
+competencies still have nothing shown, so "advance" means picking real
+gaps, not the next line of a script). There is no clock: the interview
+runs until every competency has a read, bounded by a min/max question
+band.
 
 The cross-questioning behavior isn't a special feature - it's a prompting
 and full-history discipline. Every turn the model sees the whole
 conversation so far, plus a private read on how the last answer went
-(`notes.take()` - strong/thin/wrong/dodged/dont_know, never shown to the
-candidate) that decides which of the five options it should take. Nothing
+(`evaluator.read()` - strong/thin/wrong/dodged/dont_know plus the gap
+between their answer and a correct one, never shown to the candidate)
+that decides which of the five options it should take. Nothing
 evaluative reaches the candidate until the interview ends: `scorecard.py`
 runs once, over the whole transcript, calibrated explicitly to "would a
 company hire this fresher" rather than a senior bar - naming a concept

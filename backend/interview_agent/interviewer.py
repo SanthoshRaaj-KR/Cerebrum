@@ -11,10 +11,10 @@ each turn, the way an actual interviewer makes it, not a lookup into a
 pre-written list.
 
 The interview ends when the coverage ledger says every competency has a
-read (see notes.CoverageLedger), with a min/max question band as the floor
-and ceiling. Asking and reading the last answer are deliberately separate
-calls - see notes.py. Scoring happens once, at the end - see scorecard.py.
-Nothing evaluative is ever computed or shown mid-interview.
+read (see coverage.py), with a min/max question band as the floor and
+ceiling. Asking and reading the last answer are deliberately separate
+calls - see evaluator.py. Scoring happens once, at the end - see
+scorecard.py. Nothing evaluative is ever computed or shown mid-interview.
 """
 
 from __future__ import annotations
@@ -23,11 +23,12 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
-from interview_agent import notes, prompts, research, resume
+from interview_agent import evaluator, prompts, research, resume
 from interview_agent.config import settings
 from interview_agent.context import CandidateContext
+from interview_agent.coverage import CoverageLedger
+from interview_agent.evaluator import AnswerNote, CompetencyBar, Rubric
 from interview_agent.llm import client
-from interview_agent.notes import AnswerNote, CoverageLedger
 from interview_agent.prompts import Mode
 from interview_agent.research import RoleBrief
 from interview_agent.resume import ResumeDigest
@@ -211,6 +212,21 @@ class InterviewSession:
     def _competency_names(self) -> list[str]:
         return [c.name for c in self.brief.competencies] if self.brief else []
 
+    def _rubric(self) -> Rubric:
+        """What the evaluator judges this session's answers against. Built
+        here rather than in evaluator.py so that module stays independent of
+        where the competencies came from - a role search today, the résumé
+        itself for résumé mode."""
+        if not self.brief:
+            return Rubric()
+        return Rubric(
+            competencies=[
+                CompetencyBar(name=c.name, fresher_bar=c.fresher_bar)
+                for c in self.brief.competencies
+            ],
+            red_flags=list(self.brief.red_flags),
+        )
+
     def _history(self) -> list[dict[str, str]]:
         """The conversation so far, trimmed. Private reads are deliberately
         left out - the interviewer must not see its own scoring."""
@@ -353,14 +369,14 @@ class InterviewSession:
         prev_note = self.turns[-2].note if len(self.turns) > 1 else None
         prior_read = prev_note.read if prev_note is not None else ""
 
-        current.note = await notes.take(
+        current.note = await evaluator.read(
             current.question,
             current.answer,
             current.skipped,
-            self._competency_names(),
+            self._rubric(),
             prior_read,
         )
-        # notes.take's "two weak in a row" guard keys off prior_read, which
+        # evaluator.read's "two weak in a row" guard keys off prior_read, which
         # is the previous answer whatever its topic. Only let that retire a
         # competency in the ledger when the previous answer was on the SAME
         # focus - otherwise a rough patch across different areas would settle
@@ -372,7 +388,7 @@ class InterviewSession:
         )
         self.ledger.record(
             current.note.evidenced,
-            notes.strength_of(current.note.read),
+            evaluator.strength_of(current.note.read),
             focus=current.note.focus,
             exhausted=current.note.topic_exhausted and same_focus,
         )

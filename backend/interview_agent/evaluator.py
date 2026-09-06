@@ -1,21 +1,20 @@
-"""The interviewer's private read on the interview so far.
+"""The interviewer's private read on one answer.
 
-Not shown to the candidate, ever - this is the interviewer's own working
-notes. It does two jobs:
-
-1. Sharpen the very next question: was the last answer strong, thin,
-   wrong, dodged, or an honest "I don't know" - and have we already pushed
-   on this ground once before, which means it's time to move rather than
-   grind.
-2. Carry coverage forward once the transcript outgrows remember_turns - a
-   40-minute interview has more turns than comfortably fit in context, so
-   this ledger is what still remembers "we've never touched testing" after
-   the turns that would have shown that have scrolled out of the window.
+Never shown to the candidate - this is working notes, not feedback. It has
+one job: judge the answer that just came in, well enough that the next
+question can react to it. Was the claim actually correct? Is this the
+second weak answer on the same ground, meaning it's time to move? What
+would a right answer have contained that this one didn't?
 
 Deliberately a separate, structured call from asking the question, for the
 same reason grader.py used to be separate: a call that has to both judge
-and speak fluently tends to do one of them badly - usually the judgment
+and speak fluently tends to do one of them badly - usually the judgement
 leaking into the voice as "great answer!" right before the next question.
+
+This is the fast, on-the-critical-path half of evaluation: the next
+question genuinely depends on it, so it runs on the cheap model and stays
+small. The heavier running score (scorecard.py) is the half that gets to
+take its time in the background.
 """
 
 from __future__ import annotations
@@ -27,15 +26,63 @@ from dataclasses import asdict, dataclass, field
 from interview_agent.config import settings
 from interview_agent.llm import client
 
-logger = logging.getLogger("interview_agent.notes")
+logger = logging.getLogger("interview_agent.evaluator")
 
-MAX_TOKENS = 350
+MAX_TOKENS = 450
 
 _READS = ("strong", "thin", "wrong", "dodged", "dont_know")
 
 # How much a read counts toward "we've shown something on this competency" -
 # used only to decide what still needs covering, never surfaced as a score.
 _STRENGTH = {"strong": 3, "thin": 1, "wrong": 0, "dodged": 0, "dont_know": 0}
+
+_PRIOR_WEAK = ("thin", "wrong", "dodged", "dont_know")
+
+
+@dataclass
+class CompetencyBar:
+    """One competency and what counts as having it at entry level."""
+
+    name: str
+    fresher_bar: str = ""
+
+
+@dataclass
+class Rubric:
+    """What the evaluator judges against. Built from the role brief (or,
+    for résumé mode, from the résumé) by whoever owns the session - this
+    module deliberately doesn't import research.py, so the same evaluator
+    serves any source of competencies."""
+
+    competencies: list[CompetencyBar] = field(default_factory=list)
+    red_flags: list[str] = field(default_factory=list)
+
+    @property
+    def names(self) -> list[str]:
+        return [c.name for c in self.competencies]
+
+    def render(self) -> str:
+        if not self.competencies and not self.red_flags:
+            return "No competency map was gathered - judge generally for this role."
+
+        lines: list[str] = []
+        if self.competencies:
+            lines.append(
+                "COMPETENCIES TRACKED, and what counts as HAVING each one at "
+                "entry level. Judge against this bar, not a senior one:"
+            )
+            for c in self.competencies:
+                bar = f" - {c.fresher_bar}" if c.fresher_bar else ""
+                lines.append(f"- {c.name}{bar}")
+        if self.red_flags:
+            lines.append(
+                "\nCLAIMS THAT ARE SIMPLY WRONG for this role. If the answer "
+                "asserts one of these, the read is `wrong` however fluently "
+                "it was said:"
+            )
+            for r in self.red_flags:
+                lines.append(f"- {r}")
+        return "\n".join(lines)
 
 
 @dataclass
@@ -49,98 +96,14 @@ class AnswerNote:
     # ledger knows a competency has been worked even when the answer proved
     # nothing - so it doesn't get picked again as "untouched ground".
     focus: str = ""
+    # What a correct answer would have contained that this one didn't.
+    # Empty when the answer held up. Forces the judgement to be a concrete
+    # delta rather than a bare label, and gives the running score something
+    # auditable to carry forward.
+    gap: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
-
-
-@dataclass
-class CoverageLedger:
-    """Which competencies the candidate has shown something on, and how
-    strongly - carried across the whole interview, independent of how much
-    of the raw transcript is still in context.
-
-    With the clock gone, this ledger is also the interview's end condition:
-    when every competency is "settled" - shown at thin-or-better, or worked
-    until the edge of what they know was found - there's nothing left to
-    cover and the interview wraps up (see interviewer.InterviewSession)."""
-
-    touched: dict[str, int] = field(default_factory=dict)
-    # Competencies pushed on twice with weak answers - the edge of what the
-    # candidate knows here has been found, so they count as done even though
-    # `touched` may still be 0 for them.
-    exhausted: set[str] = field(default_factory=set)
-
-    def record(
-        self,
-        evidenced: list[str],
-        strength: int,
-        focus: str = "",
-        exhausted: bool = False,
-    ) -> None:
-        for name in evidenced:
-            self.touched[name] = max(self.touched.get(name, 0), strength)
-        # A focused question that proved nothing still puts the competency
-        # on the board, so it isn't mistaken for never-asked ground.
-        if focus and focus not in self.touched:
-            self.touched[focus] = 0
-        if focus and exhausted:
-            self.exhausted.add(focus)
-
-    def settled(self, all_names: list[str]) -> list[str]:
-        """Competencies with nothing more worth asking: shown at
-        thin-or-better, or the edge of what they know was found."""
-        return [
-            n
-            for n in all_names
-            if self.touched.get(n, 0) >= 1 or n in self.exhausted
-        ]
-
-    def open_ground(self, all_names: list[str]) -> list[str]:
-        done = set(self.settled(all_names))
-        return [n for n in all_names if n not in done]
-
-    def progress(self, all_names: list[str]) -> float:
-        if not all_names:
-            return 0.0
-        return len(self.settled(all_names)) / len(all_names)
-
-    def render(self, all_competencies: list[str]) -> str:
-        if not all_competencies:
-            return ""
-        settled = self.settled(all_competencies)
-        open_ground = [n for n in all_competencies if n not in set(settled)]
-        total = len(all_competencies)
-
-        if not open_ground:
-            return (
-                f"COVERAGE - you now have a read on all {total} competencies "
-                "tracked for this role. Push hardest on whatever has held up, "
-                "or wrap the interview up; do not open brand-new ground now."
-            )
-
-        frac = len(settled) / total
-        lead = (
-            f"COVERAGE - {len(settled)} of {total} competencies have a read. "
-            f"Nothing shown yet on: {', '.join(open_ground)}."
-        )
-        if frac < 0.34:
-            tail = (
-                " Still early - go deep on two or three of these rather than "
-                "touching all of them at once."
-            )
-        elif frac < 0.75:
-            tail = (
-                " Weigh these when you pick new ground, and keep raising the "
-                "difficulty."
-            )
-        else:
-            tail = (
-                " Near the end of coverage - get something on what's left, "
-                "push hardest on what's held up, and don't start a brand-new "
-                "deep topic."
-            )
-        return lead + tail
 
 
 _SCHEMA = {
@@ -151,8 +114,9 @@ _SCHEMA = {
         "topic_exhausted": {"type": "boolean"},
         "thread": {"type": "string"},
         "focus": {"type": "string"},
+        "gap": {"type": "string"},
     },
-    "required": ["read", "evidenced", "topic_exhausted", "thread", "focus"],
+    "required": ["read", "evidenced", "topic_exhausted", "thread", "focus", "gap"],
     "additionalProperties": False,
 }
 
@@ -160,7 +124,13 @@ _PROMPT = """\
 You are the interviewer's private scratchpad, never shown to the
 candidate. Read the last question and answer and record your honest read.
 
-Competencies being tracked for this role: {competencies}
+{rubric}
+
+Judge the CONTENT of what they said, not its topic or its fluency. That
+they talked about indexing is not evidence indexing was understood. Work
+it out explicitly: what would a correct answer contain, what did they
+actually say, where is the difference. A confident, well-phrased, WRONG
+claim is `wrong` - do not let delivery carry it.
 
 - read: strong (correct, specific, shows real reasoning) / thin (right
   shape, shallow) / wrong (a confident but incorrect claim) / dodged
@@ -169,7 +139,9 @@ Competencies being tracked for this role: {competencies}
   don't know - this is NOT the same as wrong, do not conflate them; being
   straight about not knowing is worth more than bluffing).
 - evidenced: which of the tracked competencies this answer actually gave
-  evidence on, by name exactly as listed above. Empty list if none.
+  evidence on, by name exactly as listed above. Empty list if none. Only
+  list one if what they said about it was RIGHT - being wrong about a
+  topic is not evidence of the competency.
 - topic_exhausted: you are told below whether the PREVIOUS answer, on this
   same ground, was also weak (thin/wrong/dodged/dont_know). Set this true
   if THIS answer is weak too - any combination of thin, wrong, dodged, or
@@ -183,16 +155,18 @@ Competencies being tracked for this role: {competencies}
 - focus: which single tracked competency (from the list above, by name
   exactly) the question was mainly probing. Empty string if it was an
   opener or small talk that wasn't really about any of them.
+- gap: what a correct answer would have contained that theirs didn't, in
+  one short sentence. Empty string when the answer genuinely held up. For
+  a `wrong` read, name the specific thing that was wrong and what is
+  actually true.
 """
 
-_PRIOR_WEAK = ("thin", "wrong", "dodged", "dont_know")
 
-
-async def take(
+async def read(
     question: str,
     answer: str,
     skipped: bool,
-    competencies: list[str],
+    rubric: Rubric,
     prior_read: str,
 ) -> AnswerNote:
     """Never raises - a failed read just means the next question falls back
@@ -211,12 +185,7 @@ async def take(
         completion = await client().chat.completions.create(
             model=settings.model,
             messages=[
-                {
-                    "role": "system",
-                    "content": _PROMPT.format(
-                        competencies=", ".join(competencies) or "none tracked"
-                    ),
-                },
+                {"role": "system", "content": _PROMPT.format(rubric=rubric.render())},
                 {
                     "role": "user",
                     "content": f"{prior_line}\n\nQUESTION:\n{question}\n\nANSWER:\n{answer}",
@@ -233,14 +202,15 @@ async def take(
         logger.exception("could not take a private read on the last answer")
         return AnswerNote()
 
-    read = str(payload.get("read", "")).strip()
-    if read not in _READS:
-        read = "thin"
+    read_value = str(payload.get("read", "")).strip()
+    if read_value not in _READS:
+        read_value = "thin"
 
     # Only trust a focus that names a competency we're actually tracking -
     # a free-text guess would just pollute the ledger.
+    names = rubric.names
     focus = str(payload.get("focus", "")).strip()
-    if focus not in competencies:
+    if focus not in names:
         focus = ""
 
     # Deterministic safety net, independent of whether the model followed
@@ -251,17 +221,22 @@ async def take(
     # without it - it must not depend on the model reliably reasoning about
     # a previous turn it can't see in this isolated call.
     topic_exhausted = bool(payload.get("topic_exhausted", False)) or (
-        prior_read in _PRIOR_WEAK and read in _PRIOR_WEAK
+        prior_read in _PRIOR_WEAK and read_value in _PRIOR_WEAK
     )
 
     return AnswerNote(
-        read=read,
-        evidenced=[str(e).strip() for e in payload.get("evidenced", []) if str(e).strip()],
+        read=read_value,
+        evidenced=[
+            str(e).strip()
+            for e in payload.get("evidenced", [])
+            if str(e).strip() in names
+        ],
         topic_exhausted=topic_exhausted,
         thread=str(payload.get("thread", "")).strip(),
         focus=focus,
+        gap=str(payload.get("gap", "")).strip(),
     )
 
 
-def strength_of(read: str) -> int:
-    return _STRENGTH.get(read, 1)
+def strength_of(read_value: str) -> int:
+    return _STRENGTH.get(read_value, 1)
