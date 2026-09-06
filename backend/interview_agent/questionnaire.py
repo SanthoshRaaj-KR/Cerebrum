@@ -56,6 +56,10 @@ class QuestionContext:
     # deciding for itself from the reactive ladder below.
     target: str = ""
     intent: str = ""
+    # Mode-specific framing swapped in ahead of the shared ladder - see
+    # gateway.py, which uses it to run a résumé round off the candidate's
+    # own work instead of a researched role syllabus.
+    framing: str = ""
 
 
 @dataclass
@@ -77,6 +81,8 @@ questions in one turn.
 {role_research}
 
 {coverage_block}
+
+{framing}
 
 BEFORE you think about where to go next, react to what they just said, in
 that order. The coverage note above tells you WHERE to go once you've
@@ -181,6 +187,7 @@ def _system_prompt(ctx: QuestionContext) -> str:
         resume_digest=ctx.resume_digest.render() if ctx.resume_digest else "",
         role_research=ctx.brief.render() if ctx.brief else "",
         coverage_block=ctx.coverage_note,
+        framing=ctx.framing,
     )
 
 

@@ -24,7 +24,15 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
-from interview_agent import agent, evaluator, prompts, questionnaire, research, resume
+from interview_agent import (
+    agent,
+    evaluator,
+    gateway,
+    prompts,
+    questionnaire,
+    research,
+    resume,
+)
 from interview_agent.config import settings
 from interview_agent.context import CandidateContext
 from interview_agent.coverage import CoverageLedger
@@ -77,12 +85,20 @@ class InterviewSession:
     # -- setup --------------------------------------------------------------
 
     async def start(self, max_questions: int | None = None) -> Turn:
-        # Independent prep work, both non-raising - run them together so a
-        # session start is one round-trip's wait, not two.
-        self.brief, self.resume_digest = await asyncio.gather(
-            research.build_brief(self.candidate, self.mode),
-            resume.digest(self.candidate.resume),
-        )
+        if self.mode_key == gateway.MODE_KEY:
+            # The résumé round has no external syllabus - its brief is built
+            # FROM the résumé, so the digest has to land first.
+            self.resume_digest = await resume.digest(self.candidate.resume)
+            self.brief = await gateway.build_brief(
+                self.candidate, self.resume_digest, self.mode
+            )
+        else:
+            # Independent prep work, both non-raising - run them together so
+            # a session start is one round-trip's wait, not two.
+            self.brief, self.resume_digest = await asyncio.gather(
+                research.build_brief(self.candidate, self.mode),
+                resume.digest(self.candidate.resume),
+            )
         self.turns = []
         self.ledger = CoverageLedger()
         self.running_score = RunningScore()
@@ -98,6 +114,14 @@ class InterviewSession:
         """The most questions this interview will ask before wrapping up,
         no matter how coverage is going."""
         return self._max_questions or settings.max_questions
+
+    @property
+    def question_agent(self):
+        """Which agent writes this mode's questions. The résumé round runs
+        off the candidate's own work (gateway.py); everything else runs off
+        a researched role brief. Same next_question(ctx) signature, so
+        neither the coordinator nor the main agent has to care which."""
+        return gateway if self.mode_key == gateway.MODE_KEY else questionnaire
 
     @property
     def closing(self) -> bool:
@@ -234,7 +258,7 @@ class InterviewSession:
         else:
             stage = "next"
 
-        question = await questionnaire.next_question(self._question_context(stage))
+        question = await self.question_agent.next_question(self._question_context(stage))
         turn = Turn(question=question.text)
         self.turns.append(turn)
         return turn

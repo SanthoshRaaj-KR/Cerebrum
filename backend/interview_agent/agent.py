@@ -32,7 +32,7 @@ import json
 import logging
 from dataclasses import dataclass
 
-from interview_agent import evaluator, questionnaire
+from interview_agent import evaluator
 from interview_agent.config import settings
 from interview_agent.evaluator import AnswerNote
 from interview_agent.llm import client
@@ -287,7 +287,8 @@ async def run_turn(session, current, closing: bool) -> TurnDecision:
                 ctx = session._question_context("closing" if closing else "next")
                 ctx.intent = intent
                 ctx.target = target
-                question = await questionnaire.next_question(ctx)
+                # Routed by mode: the résumé round uses the gateway agent.
+                question = await session.question_agent.next_question(ctx)
                 decision.question = question.text
                 logger.info(
                     "main agent: %s%s - %s",
