@@ -2,10 +2,10 @@
 
     python -m interview_agent.doctor
 
-Validates the API keys (the LLM provider, Deepgram, Cartesia, Tavily)
-against the real services, so a bad key surfaces here rather than as a
-dead mic, a silent interviewer, or an ungrounded set of questions
-mid-session.
+Validates the API keys (the LLM provider, Deepgram, Cartesia, and the
+role-research search providers) against the real services, so a bad key
+surfaces here rather than as a dead mic, a silent interviewer, or an
+ungrounded set of questions mid-session.
 """
 
 from __future__ import annotations
@@ -257,51 +257,107 @@ def _default_voice_id() -> str:
     return configured or "a0e99841-438c-4a64-b679-ae501e7d6091"
 
 
-def check_tavily() -> None:
-    """Only matters if research.enabled selects tavily - checked the same
-    way as everything else here: prove the key actually runs a search,
-    not just that it parses."""
+_RESEARCH_QUERY = "backend engineer fresher interview questions"
+
+
+def check_research() -> None:
+    """Role research runs a fallback chain of search providers (see
+    config.yaml research.providers). Check each one the same way as
+    everything else here: prove the key actually runs a search, not just
+    that it parses. A missing fallback key is a warning, not a failure -
+    the chain is meant to survive that."""
+    print("\nRole research (grounds the questions)")
     if not settings.research_enabled:
-        print("\nTavily (role research)")
         print(f"{WARN} research.enabled is false in config.yaml - skipped")
         return
-    if settings.research_provider != "tavily":
-        print("\nTavily (role research)")
-        print(f"{WARN} research.provider is {settings.research_provider!r}, not tavily - skipped")
-        return
 
-    print("\nTavily (role research)")
+    providers = settings.research_providers
+    known = {"tavily": _check_tavily_key, "brave": _check_brave_key}
+    print(f"{OK} providers, in fallback order: {', '.join(providers) or '(none)'}")
+
+    usable = False
+    for name in providers:
+        checker = known.get(name)
+        if checker is None:
+            print(f"{WARN} {name}: unknown provider - ignored at runtime")
+            continue
+        if checker():
+            usable = True
+
+    if not usable:
+        print(f"{BAD} no research provider is usable - the brief will fall back to model knowledge")
+        _fail("no usable research provider")
+
+
+def _check_tavily_key() -> bool:
+    """Returns True if Tavily is usable. A rejected/rate-limited key is a
+    hard failure; an absent key is just skipped (it may be the fallback)."""
     if not settings.tavily_api_key:
-        print(f"{BAD} TAVILY_API_KEY not set")
-        _fail("TAVILY_API_KEY missing")
-        return
-
+        print(f"{WARN} tavily: TAVILY_API_KEY not set - skipped")
+        return False
     try:
         r = httpx.post(
             "https://api.tavily.com/search",
             json={
                 "api_key": settings.tavily_api_key,
-                "query": "backend engineer fresher interview questions",
+                "query": _RESEARCH_QUERY,
                 "search_depth": "basic",
                 "max_results": 1,
             },
             timeout=20.0,
         )
     except Exception as exc:  # noqa: BLE001
-        print(f"{BAD} could not reach Tavily: {exc}")
+        print(f"{BAD} tavily: could not reach Tavily: {exc}")
         _fail("Tavily unreachable")
-        return
+        return False
 
     if r.status_code == 200:
-        print(f"{OK} key valid, search working")
-    elif r.status_code in (401, 403):
-        print(f"{BAD} key rejected. Make a new one at tavily.com")
+        print(f"{OK} tavily: key valid, search working")
+        return True
+    if r.status_code in (401, 403):
+        print(f"{BAD} tavily: key rejected. Make a new one at tavily.com")
         _fail("TAVILY_API_KEY invalid")
     elif r.status_code == 429:
-        print(f"{BAD} rate limited or out of search credits - check usage at app.tavily.com")
+        print(f"{BAD} tavily: rate limited or out of search credits - check app.tavily.com")
         _fail("Tavily rate limited or out of credit")
     else:
-        print(f"{WARN} unexpected response searching {r.status_code}: {r.text[:120]}")
+        print(f"{WARN} tavily: unexpected response {r.status_code}: {r.text[:120]}")
+    return False
+
+
+def _check_brave_key() -> bool:
+    """Returns True if Brave is usable. Same rule as Tavily: absent key is a
+    skip, rejected key is a failure."""
+    if not settings.brave_api_key:
+        print(f"{WARN} brave: BRAVE_API_KEY not set - skipped")
+        return False
+    try:
+        r = httpx.get(
+            "https://api.search.brave.com/res/v1/web/search",
+            params={"q": _RESEARCH_QUERY, "count": 1},
+            headers={
+                "Accept": "application/json",
+                "X-Subscription-Token": settings.brave_api_key,
+            },
+            timeout=20.0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"{BAD} brave: could not reach Brave: {exc}")
+        _fail("Brave unreachable")
+        return False
+
+    if r.status_code == 200:
+        print(f"{OK} brave: key valid, search working")
+        return True
+    if r.status_code in (401, 403):
+        print(f"{BAD} brave: key rejected. Check BRAVE_API_KEY at api-dashboard.search.brave.com")
+        _fail("BRAVE_API_KEY invalid")
+    elif r.status_code == 429:
+        print(f"{BAD} brave: rate limited or out of quota - check api-dashboard.search.brave.com")
+        _fail("Brave rate limited or out of quota")
+    else:
+        print(f"{WARN} brave: unexpected response {r.status_code}: {r.text[:120]}")
+    return False
 
 
 def check_web() -> None:
@@ -361,7 +417,7 @@ def main(argv: list[str] | None = None) -> int:
         check_llm,
         check_deepgram,
         check_tts,
-        check_tavily,
+        check_research,
         check_web,
         check_roles_and_modes,
     ):

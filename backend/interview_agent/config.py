@@ -30,6 +30,7 @@ class Settings:
     cerebras_api_key: str = ""
     cartesia_api_key: str = ""
     tavily_api_key: str = ""
+    brave_api_key: str = ""
     raw: dict[str, Any] = field(default_factory=dict)
 
     # -- config.yaml sections -------------------------------------------------
@@ -100,7 +101,19 @@ class Settings:
 
     @property
     def research_provider(self) -> str:
+        """Back-compat only: the old singular key. research_providers is
+        what the search chain reads now."""
         return str(self.research.get("provider", "tavily")).lower()
+
+    @property
+    def research_providers(self) -> list[str]:
+        """Search providers to try, in fallback order. Prefers the list key
+        research.providers; falls back to the old singular research.provider
+        so an existing config.yaml keeps working."""
+        raw = self.research.get("providers")
+        if isinstance(raw, list) and raw:
+            return [str(p).strip().lower() for p in raw if str(p).strip()]
+        return [self.research_provider]
 
     @property
     def research_cache_days(self) -> int:
@@ -139,6 +152,7 @@ def load_settings() -> Settings:
         cerebras_api_key=os.environ.get("CEREBRAS_API_KEY", "").strip(),
         cartesia_api_key=os.environ.get("CARTESIA_API_KEY", "").strip(),
         tavily_api_key=os.environ.get("TAVILY_API_KEY", "").strip(),
+        brave_api_key=os.environ.get("BRAVE_API_KEY", "").strip(),
         raw=raw,
     )
 
@@ -166,20 +180,22 @@ def load_settings() -> Settings:
         )
         raise SystemExit(1)
 
-    if (
-        settings.research_enabled
-        and settings.research_provider == "tavily"
-        and not settings.tavily_api_key
-    ):
-        print(
-            "\nCerebrum cannot start - config.yaml has research.enabled"
-            " true with research.provider tavily, but TAVILY_API_KEY is not"
-            " in .env.\nEither add the key, or set research.enabled to false"
-            " (the interview still runs, just without live research"
-            " grounding).\n",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
+    if settings.research_enabled:
+        _provider_keys = {
+            "tavily": settings.tavily_api_key,
+            "brave": settings.brave_api_key,
+        }
+        if not any(_provider_keys.get(p) for p in settings.research_providers):
+            listed = ", ".join(settings.research_providers) or "(none)"
+            print(
+                "\nCerebrum cannot start - config.yaml has research.enabled"
+                f" true with providers [{listed}], but none of them have a"
+                " key in .env.\nAdd TAVILY_API_KEY or BRAVE_API_KEY, or set"
+                " research.enabled to false (the interview still runs, just"
+                " without live research grounding).\n",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
 
     return settings
 

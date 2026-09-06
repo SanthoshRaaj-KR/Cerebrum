@@ -53,8 +53,13 @@ research:
   # skip this and fall back to the model's own knowledge - the interview
   # still runs, just less current.
   enabled: true
-  # Only tavily is wired up right now.
-  provider: tavily
+  # Search providers, tried in this order. The first one that has a key in
+  # .env and returns results grounds the brief; the rest are fallbacks for
+  # when it's down or rate-limited. A provider with no key is skipped, so
+  # listing brave here costs nothing until you add BRAVE_API_KEY.
+  providers:
+    - tavily
+    - brave
   # A second session on the same role/level/mode reuses the cached brief
   # instead of paying for the search and the distillation call again.
   cache_days: 14

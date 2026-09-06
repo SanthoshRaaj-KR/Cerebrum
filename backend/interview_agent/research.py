@@ -2,9 +2,9 @@
 
 Real interviewers don't invent a role's shape from vibes - they know what
 freshers for that role are actually asked and actually expected to know.
-This module gets that from a live Tavily search, then distills it into a
-RoleBrief the interviewer carries as background knowledge for the whole
-session.
+This module gets that from a live web search (see search.py for the
+provider fallback chain), then distills it into a RoleBrief the interviewer
+carries as background knowledge for the whole session.
 
 Nothing here is a question plan. The brief calibrates difficulty and
 territory - what a fresher for this role is fairly judged on, and roughly
@@ -26,8 +26,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-import httpx
-
+from interview_agent import search
 from interview_agent.config import ROOT, settings
 from interview_agent.context import CandidateContext
 from interview_agent.llm import client
@@ -35,10 +34,8 @@ from interview_agent.prompts import Mode
 
 logger = logging.getLogger("interview_agent.research")
 
-TAVILY_URL = "https://api.tavily.com/search"
 CACHE_DIR = ROOT / ".cache" / "research"
 DISTILL_MAX_TOKENS = 1600
-SEARCH_TIMEOUT = 20.0
 
 
 @dataclass
@@ -55,9 +52,10 @@ class RoleBrief:
     real_questions: list[str] = field(default_factory=list)
     red_flags: list[str] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
-    # False when Tavily was skipped, unconfigured, or came back empty - the
-    # brief still exists (from the model's own knowledge of the role) but
-    # isn't backed by a live search, which the report is honest about.
+    # False when search was skipped, unconfigured, or every provider came
+    # back empty - the brief still exists (from the model's own knowledge of
+    # the role) but isn't backed by a live search, which the report is
+    # honest about.
     grounded: bool = True
 
     def to_dict(self) -> dict:
@@ -152,53 +150,30 @@ def _save_cache(key: str, brief: RoleBrief) -> None:
 # -- search --------------------------------------------------------------
 
 
-async def _tavily_search(query: str, max_results: int) -> list[dict]:
-    async with httpx.AsyncClient(timeout=SEARCH_TIMEOUT) as http:
-        r = await http.post(
-            TAVILY_URL,
-            json={
-                "api_key": settings.tavily_api_key,
-                "query": query,
-                "search_depth": "basic",
-                "max_results": max_results,
-                "include_answer": False,
-            },
-        )
-    r.raise_for_status()
-    return r.json().get("results", [])
-
-
 async def _gather_raw(role: str) -> tuple[str, list[str]]:
     """Runs the searches, returns (digest text for the LLM, source urls).
 
     Three angles rather than one query: what's actually asked, what's
     actually required, and the entry-level framing specifically - a bare
-    "{role} interview questions" search skews toward senior content.
+    "{role} interview questions" search skews toward senior content. The
+    provider (Tavily, Brave, ...) is chosen by search.gather.
     """
     queries = [
         f"{role} fresher interview questions asked",
         f"entry level {role} technical interview questions",
         f"{role} fresher job description required skills",
     ]
-    results: list[dict] = []
-    for q in queries:
-        try:
-            results.extend(await _tavily_search(q, settings.research_max_results))
-        except Exception:  # noqa: BLE001
-            logger.exception("tavily search failed for %r", q)
+    outcome = await search.gather(queries, settings.research_max_results)
 
     seen: set[str] = set()
     digest_parts: list[str] = []
     sources: list[str] = []
-    for res in results:
-        url = res.get("url", "")
-        if not url or url in seen:
+    for hit in outcome.hits:
+        if not hit.url or hit.url in seen:
             continue
-        seen.add(url)
-        title = res.get("title", "")
-        content = (res.get("content", "") or "")[:1200]
-        digest_parts.append(f"SOURCE: {title} ({url})\n{content}")
-        sources.append(url)
+        seen.add(hit.url)
+        digest_parts.append(f"SOURCE: {hit.title} ({hit.url})\n{hit.content[:1200]}")
+        sources.append(hit.url)
 
     return "\n\n".join(digest_parts), sources[:10]
 
@@ -322,7 +297,7 @@ async def build_brief(candidate: CandidateContext, mode: Mode) -> RoleBrief:
     if cached is not None:
         return cached
 
-    if not settings.research_enabled or not settings.tavily_api_key:
+    if not settings.research_enabled or not search.any_provider_configured():
         try:
             brief = await _distill(role, mode, digest="")
         except Exception:  # noqa: BLE001
