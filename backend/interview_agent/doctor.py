@@ -2,10 +2,11 @@
 
     python -m interview_agent.doctor
 
-Validates the API keys (the LLM provider, Deepgram, Cartesia, and the
-role-research search providers) against the real services, so a bad key
-surfaces here rather than as a dead mic, a silent interviewer, or an
-ungrounded set of questions mid-session.
+Validates the API keys (the LLM provider, Deepgram for dictation, and
+the role-research search providers) against the real services, so a bad
+key surfaces here rather than as a dead mic or an ungrounded set of
+questions mid-session. There is no TTS check: the interviewer never
+speaks, so there is no voice to validate.
 """
 
 from __future__ import annotations
@@ -151,119 +152,6 @@ def check_deepgram() -> None:
         _fail("DEEPGRAM_API_KEY invalid")
     else:
         print(f"{WARN} unexpected response {r.status_code}: {r.text[:120]}")
-
-
-def check_tts() -> None:
-    """Checks whichever TTS provider config.yaml actually selects."""
-    if settings.tts_provider == "cartesia":
-        _check_cartesia()
-    else:
-        _check_deepgram_tts()
-
-
-def _check_deepgram_tts() -> None:
-    print("\nDeepgram TTS (the interviewer's voice)")
-    voice = settings.tts_voice_id or "aura-2-thalia-en"
-    try:
-        r = httpx.post(
-            f"https://api.deepgram.com/v1/speak?model={voice}",
-            headers={
-                "Authorization": f"Token {settings.deepgram_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={"text": "test"},
-            timeout=30.0,
-        )
-    except Exception as exc:  # noqa: BLE001
-        print(f"{BAD} could not reach Deepgram TTS: {exc}")
-        _fail("Deepgram TTS unreachable")
-        return
-
-    if r.status_code == 200:
-        print(f"{OK} can synthesize speech (voice {voice})")
-    elif r.status_code in (401, 403):
-        print(f"{BAD} key rejected for TTS. Check DEEPGRAM_API_KEY")
-        _fail("DEEPGRAM_API_KEY invalid for TTS")
-    elif r.status_code == 402:
-        print(f"{BAD} out of credit - check billing at console.deepgram.com")
-        _fail("Deepgram out of credit")
-    else:
-        print(f"{WARN} unexpected response synthesizing speech {r.status_code}: {r.text[:150]}")
-
-
-def _check_cartesia() -> None:
-    print("\nCartesia (the interviewer's voice)")
-    try:
-        r = httpx.get(
-            "https://api.cartesia.ai/voices",
-            headers={
-                "Authorization": f"Bearer {settings.cartesia_api_key}",
-                "Cartesia-Version": "2024-06-10",
-            },
-            timeout=15.0,
-        )
-    except Exception as exc:  # noqa: BLE001
-        print(f"{BAD} could not reach Cartesia: {exc}")
-        _fail("Cartesia unreachable")
-        return
-
-    if r.status_code == 401 or r.status_code == 403:
-        print(f"{BAD} key rejected. Check CARTESIA_API_KEY")
-        _fail("CARTESIA_API_KEY invalid")
-        return
-    if r.status_code != 200:
-        print(f"{WARN} unexpected response listing voices {r.status_code}: {r.text[:120]}")
-        return
-    print(f"{OK} key valid")
-
-    # Listing voices doesn't touch billing; actually synthesizing does (same
-    # gap the Cerebras check above closed) - a key can list voices fine and
-    # still be out of credit for real TTS. Voice id left unset here uses
-    # Cartesia's account default, same as the pipeline does when
-    # voice.tts.voice_id in config.yaml is blank.
-    try:
-        r = httpx.post(
-            "https://api.cartesia.ai/tts/bytes",
-            headers={
-                "Authorization": f"Bearer {settings.cartesia_api_key}",
-                "Cartesia-Version": "2024-06-10",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model_id": "sonic-2",
-                "transcript": "hi",
-                "voice": {"mode": "id", "id": _default_voice_id()},
-                "output_format": {
-                    "container": "raw",
-                    "encoding": "pcm_s16le",
-                    "sample_rate": 16000,
-                },
-            },
-            timeout=30.0,
-        )
-    except Exception as exc:  # noqa: BLE001
-        print(f"{BAD} could not synthesize speech: {exc}")
-        _fail("Cartesia synthesis unreachable")
-        return
-
-    if r.status_code == 200:
-        print(f"{OK} can synthesize speech")
-    elif r.status_code == 402:
-        print(f"{BAD} out of credit - top up at play.cartesia.ai (billing)")
-        _fail("Cartesia out of credit")
-    elif r.status_code in (401, 403):
-        print(f"{BAD} key rejected during synthesis. Check CARTESIA_API_KEY")
-        _fail("CARTESIA_API_KEY invalid")
-    else:
-        print(f"{WARN} unexpected response synthesizing speech {r.status_code}: {r.text[:150]}")
-
-
-def _default_voice_id() -> str:
-    configured = ((settings.voice.get("tts") or {}).get("voice_id") or "").strip()
-    # Cartesia's well-known default demo voice, used only for this preflight
-    # ping when config.yaml leaves voice_id blank (pipeline.py itself passes
-    # voice_id=None in that case, which picks the account default instead).
-    return configured or "a0e99841-438c-4a64-b679-ae501e7d6091"
 
 
 _RESEARCH_QUERY = "backend engineer fresher interview questions"
@@ -428,7 +316,6 @@ def main(argv: list[str] | None = None) -> int:
     for check in (
         check_llm,
         check_deepgram,
-        check_tts,
         check_research,
         check_web,
         check_roles_and_modes,

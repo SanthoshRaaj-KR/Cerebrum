@@ -1,4 +1,4 @@
-pipecat-ai[cerebras,deepgram,cartesia,silero,webrtc]==1.7.0
+pipecat-ai[cerebras,deepgram,silero,webrtc]==1.7.0
 fastapi==0.141.1
 python-multipart==0.0.20
 uvicorn[standard]==0.52.3

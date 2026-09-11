@@ -97,14 +97,9 @@ research:
   max_results: 5
 
 voice:
+  # Dictation only. The candidate may speak their answer instead of typing
+  # it; the transcript lands in the answer box and the normal typed flow
+  # takes over. The interviewer never speaks back - there is no TTS here
+  # and pipeline.py negotiates no outbound audio at all.
   stt:
     provider: deepgram
-  tts:
-    # deepgram or cartesia. Deepgram is the default because it does both
-    # speech-to-text and text-to-speech off the same key - one less account
-    # to hold. Switch to cartesia if you prefer its voices; that needs
-    # CARTESIA_API_KEY in .env, which is otherwise not required at all.
-    provider: deepgram
-    # Voice id. Blank picks the provider's default - aura-2-thalia-en for
-    # Deepgram, the account default for Cartesia.
-    voice_id: ""

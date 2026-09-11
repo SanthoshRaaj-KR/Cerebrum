@@ -61,7 +61,6 @@ if (-not (Test-Path $envFile)) {
     Say "  CEREBRAS_API_KEY   cloud.cerebras.ai"
     Say "  DEEPGRAM_API_KEY   console.deepgram.com"
     Say "  TAVILY_API_KEY     tavily.com"
-    Say "  CARTESIA_API_KEY   play.cartesia.ai"
     Say ""
     exit 1
 }

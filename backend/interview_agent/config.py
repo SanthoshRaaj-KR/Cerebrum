@@ -15,12 +15,18 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 load_dotenv(ROOT / ".env")
 
-# Only Deepgram is unconditionally required - it does both STT and TTS, so
-# every voice session needs it. The LLM key depends on interviewer.provider,
-# and Cartesia only matters if voice.tts.provider selects it; both are
-# checked against the actual config at load time rather than demanded from
-# everyone.
+# Deepgram is unconditionally required: it powers dictation, which is the
+# one voice capability this system has. The LLM key depends on
+# interviewer.provider, so it's checked against the actual config at load
+# time rather than demanded from everyone.
 _REQUIRED = ["DEEPGRAM_API_KEY"]
+
+# The two turn coordinators. See Settings.coordinator.
+COORDINATORS = frozenset({"code", "agent"})
+
+
+class ConfigError(ValueError):
+    """config.yaml says something that cannot be honoured."""
 
 
 @dataclass
@@ -28,7 +34,6 @@ class Settings:
     deepgram_api_key: str
     openai_api_key: str = ""
     cerebras_api_key: str = ""
-    cartesia_api_key: str = ""
     tavily_api_key: str = ""
     brave_api_key: str = ""
     raw: dict[str, Any] = field(default_factory=dict)
@@ -45,10 +50,6 @@ class Settings:
     @property
     def interviewer(self) -> dict[str, Any]:
         return self._section("interviewer")
-
-    @property
-    def voice(self) -> dict[str, Any]:
-        return self._section("voice")
 
     @property
     def interview(self) -> dict[str, Any]:
@@ -86,8 +87,19 @@ class Settings:
         """Who drives a turn: 'agent' runs the LLM main agent with
         tool-calling (agent.py), 'code' runs the deterministic loop in
         interviewer.py. Both enforce the same invariants in code - the
-        agent only ever chooses intent and target."""
-        return str(self.interviewer.get("coordinator", "code")).strip().lower()
+        agent only ever chooses intent and target.
+
+        Validated rather than defaulted: interviewer.py selects the agent
+        path on `== "agent"`, so a typo here would silently run the other
+        coordinator for a whole interview and look like the agent simply
+        behaving identically to the deterministic loop."""
+        value = str(self.interviewer.get("coordinator", "code")).strip().lower()
+        if value not in COORDINATORS:
+            raise ConfigError(
+                f"interviewer.coordinator is {value!r} in config.yaml; "
+                f"it must be one of: {', '.join(sorted(COORDINATORS))}"
+            )
+        return value
 
     @property
     def double_check_wrong(self) -> bool:
@@ -155,13 +167,10 @@ class Settings:
     def research_max_results(self) -> int:
         return max(1, min(10, int(self.research.get("max_results", 5))))
 
-    @property
-    def tts_provider(self) -> str:
-        return str((self.voice.get("tts") or {}).get("provider", "deepgram")).lower()
-
-    @property
-    def tts_voice_id(self) -> str:
-        return str((self.voice.get("tts") or {}).get("voice_id", "")).strip()
+    # There is deliberately no TTS setting here. The interviewer never
+    # speaks - pipeline.py is dictation-only and negotiates no outbound
+    # audio at all - so a voice.tts section would be configuring a
+    # capability the system does not have.
 
 
 def load_settings() -> Settings:
@@ -182,7 +191,6 @@ def load_settings() -> Settings:
         deepgram_api_key=os.environ["DEEPGRAM_API_KEY"],
         openai_api_key=os.environ.get("OPENAI_API_KEY", "").strip(),
         cerebras_api_key=os.environ.get("CEREBRAS_API_KEY", "").strip(),
-        cartesia_api_key=os.environ.get("CARTESIA_API_KEY", "").strip(),
         tavily_api_key=os.environ.get("TAVILY_API_KEY", "").strip(),
         brave_api_key=os.environ.get("BRAVE_API_KEY", "").strip(),
         raw=raw,
@@ -202,15 +210,13 @@ def load_settings() -> Settings:
         )
         raise SystemExit(1)
 
-    if settings.tts_provider == "cartesia" and not settings.cartesia_api_key:
-        print(
-            "\nCerebrum cannot start - config.yaml sets"
-            " voice.tts.provider to cartesia, but CARTESIA_API_KEY is not in"
-            " .env.\nEither add the key, or set the provider back to deepgram"
-            " (which needs no extra key).\n",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
+    # Read it once here so a bad value fails at startup with a clear message
+    # rather than raising from a property call midway through an interview.
+    try:
+        settings.coordinator
+    except ConfigError as exc:
+        print(f"\nCerebrum cannot start - {exc}\n", file=sys.stderr)
+        raise SystemExit(1) from None
 
     if settings.research_enabled:
         _provider_keys = {
