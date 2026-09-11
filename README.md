@@ -47,13 +47,13 @@ research is grounded in.
 | The interviewer | OpenAI (default) | Your existing credits - [platform.openai.com](https://platform.openai.com/api-keys) |
 | The interviewer (faster alternative) | Cerebras | Set `interviewer.provider: cerebras` - [cloud.cerebras.ai](https://cloud.cerebras.ai) |
 | Role research (real fresher questions + competencies) | Tavily | Free tier available - [tavily.com](https://tavily.com) |
-| Speech-to-text **and** text-to-speech | Deepgram | Free tier available - [console.deepgram.com](https://console.deepgram.com) |
-| Text-to-speech (optional alternative) | Cartesia | Only if you switch `voice.tts.provider` - [play.cartesia.ai](https://play.cartesia.ai) |
+| Speech-to-text, so you can speak an answer instead of typing it | Deepgram | Free tier available - [console.deepgram.com](https://console.deepgram.com) |
 
-**Three keys, not five.** Deepgram does both STT and TTS off one key, and
-the LLM needs only whichever provider you select. All swaps are one line
-in `config.yaml`; set `research.enabled: false` there to skip Tavily
-entirely and fall back to the model's own knowledge of the role.
+**Three keys, not five.** The interview is typed - the interviewer never
+speaks, so there is no text-to-speech to pay for - and the LLM needs only
+whichever provider you select. All swaps are one line in `config.yaml`;
+set `research.enabled: false` there to skip Tavily entirely and fall back
+to the model's own knowledge of the role.
 
 ## Setup
 
@@ -126,9 +126,8 @@ Three keys go in `.env` - see `.env.example`:
   in which case the interview still runs, just grounded in the model's own
   knowledge of the role instead of a live search.
 
-The other two keys are optional: the LLM provider you *didn't* pick, and
-`CARTESIA_API_KEY` (only read when `voice.tts.provider` is `cartesia`).
-Leaving them blank is fine - startup only demands the ones your config
+The remaining key is optional: the LLM provider you *didn't* pick.
+Leaving it blank is fine - startup only demands the ones your config
 actually uses, and names the missing one if you switch providers without
 adding its key.
 
@@ -213,6 +212,15 @@ senior bar - naming a concept plus one worked example plus reasoning about
 a trade-off out loud is a solid 7-8, and an honest "I don't know" costs
 far less than a confidently wrong claim.
 
+The console shows all of this rather than hiding it: the setup screen
+renders the actual pipeline - which module runs at each stage, on which
+model, with which coordinator driving - and the interview sidebar keeps a
+compact version of it on screen throughout. Every value on those panels is
+read from `/api/health` and the live session state, so the diagram cannot
+drift from the configuration the way a hand-drawn one would. It shows the
+machinery and none of the judgements: which agents run is fine to see
+mid-interview, how any given answer was read is not.
+
 The same composition is used whether the interview is running over the
 text-and-dictation console (`interviewer.InterviewSession`, a plain
 message list) or an internal call from `tools/quality_check.py` - the
@@ -242,12 +250,31 @@ through TTS) isn't built - `pipeline.py`'s mic path only turns speech into
 the answer box's text.
 
 The multi-agent split (`agent.py`, `questionnaire.py`, `gateway.py`,
-`evaluator.py`) is built and unit-tested per component - the guardrails on
-the main agent are verified individually - but the `coordinator: agent`
-path has not yet been run against a live bridge for a whole interview, and
-the résumé gateway's brief quality hasn't been eyeballed on a real résumé.
-Both are the next thing to do: flip `interviewer.coordinator` and diff two
-`tools/quality_check.py hostile` transcripts.
+`evaluator.py`) is built, and both coordinators now hold their structural
+invariants under `tools/coordinator_check.py` - which drives a whole
+interview through each of them with every model call stubbed, and asserts
+the things that are meant to be true by construction: the question cap is
+honoured, a wrap-up turn actually reaches the candidate, the questionnaire
+is steered by the read on the answer it is reacting to, and no question is
+written and then thrown away. It needs no API keys and no running bridge.
+
+`coordinator: agent` has been run live against a real bridge and a real
+résumé: the gateway builds its brief from the candidate's own projects,
+the main agent logs its move each turn (`main agent: dig @ <competency>`),
+and the scorecard comes back written off the background per-answer
+judgements. What has *not* been done is the quality comparison - flipping
+`interviewer.coordinator` and diffing two `tools/quality_check.py hostile`
+transcripts to see whether the LLM main agent actually interviews better
+than the deterministic ladder, or just costs three more round-trips a
+question. `code` remains the default until that says otherwise.
+
+One thing that comparison should look at specifically: in the live run
+above, a confidently wrong claim ("SQLite handles concurrent writes better
+than Postgres") was read as thin rather than wrong on the critical path,
+so the agent dug rather than challenging it to the candidate's face. The
+background scorer on the stronger model caught it and it landed in the
+scorecard's gaps and coach notes - but catching it a turn earlier, in the
+room, is the whole point of the `challenge` rung.
 
 What hasn't been exercised with a *real* Tavily key is whether the
 research it returns is actually good - the code path (search → digest →
