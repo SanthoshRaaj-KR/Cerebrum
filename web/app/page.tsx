@@ -16,8 +16,12 @@ import {
 } from "@/lib/api";
 import { MicSession, MicStatus } from "@/lib/webrtc";
 import { Pipeline, PipelineCompact } from "./pipeline";
+import { BuildingReport, Dots, StartingUp, ThinkingTurn } from "./waiting";
 
 type Stage = "setup" | "interview" | "report";
+
+/** The one round with no external role to research - see gateway.py. */
+const RESUME_MODE = "resume_projects";
 
 const VERDICT_LABEL: Record<Scorecard["verdict"], string> = {
   strong_yes: "Strong yes",
@@ -39,15 +43,29 @@ export default function Home() {
 
   const [stage, setStage] = useState<Stage>("setup");
   const [mode, setMode] = useState<Mode | null>(null);
-  const [role, setRole] = useState("Backend Engineer");
+  const [role, setRole] = useState("");
   const [level, setLevel] = useState("Fresher");
   const [resume, setResume] = useState("");
   const [parsing, setParsing] = useState(false);
+  // Once they edit the role themselves it is theirs - picking a different
+  // round must not quietly overwrite what they typed.
+  const roleEdited = useRef(false);
 
   const [session, setSession] = useState<SessionState | null>(null);
   const [report, setReport] = useState<Scorecard | null>(null);
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
+  // Distinct from `busy`: the wait for the scorecard is a different wait to
+  // the one between questions, and says a different thing. On the "End
+  // interview" path the session isn't flagged finished until the response
+  // lands, so it can't be inferred from the session.
+  const [finishing, setFinishing] = useState(false);
+  // What they just submitted, held only until the server echoes it back in
+  // the turn list. Without it the composer closes, the turn has no answer
+  // on it yet, and their own words vanish off the screen while they wait.
+  const [pending, setPending] = useState<{ text: string; skipped: boolean } | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
 
   const [micStatus, setMicStatus] = useState<MicStatus>("idle");
@@ -61,6 +79,15 @@ export default function Home() {
     // Drop the mic if the tab goes away mid-interview.
     return () => micRef.current?.stop();
   }, []);
+
+  /** Picking a round fills in the role it implies, so the next step is a
+   * confirmation rather than a re-ask - and so choosing "AI Engineer" stops
+   * researching backend interviews. Their own typing always wins. */
+  function pickMode(m: Mode) {
+    setMode(m);
+    setError(null);
+    if (!roleEdited.current) setRole(m.defaultRole);
+  }
 
   const current = session?.turns[session.turns.length - 1] ?? null;
   const awaitingAnswer = !!current && current.answer === null;
@@ -108,12 +135,17 @@ export default function Home() {
     stopMic();
     setBusy(true);
     setError(null);
+    setPending({ text, skipped });
     try {
       const state = await submitAnswer(skipped ? "" : text, skipped);
       setSession(state);
       setAnswer("");
+      setPending(null);
       if (state.finished) await finish();
     } catch (err) {
+      // Put it back in the box - losing a long typed answer to a blip is
+      // not something they should have to retype from memory.
+      setPending(null);
       setError(err instanceof Error ? err.message : "could not submit that answer");
     } finally {
       setBusy(false);
@@ -122,6 +154,7 @@ export default function Home() {
 
   async function finish() {
     setBusy(true);
+    setFinishing(true);
     try {
       const state = await getReport();
       setSession(state);
@@ -131,12 +164,16 @@ export default function Home() {
       setError(err instanceof Error ? err.message : "could not build the report");
     } finally {
       setBusy(false);
+      setFinishing(false);
     }
   }
 
   function restart() {
+    roleEdited.current = false;
     stopMic();
     resetSession().catch(() => {});
+    setFinishing(false);
+    setPending(null);
     setSession(null);
     setReport(null);
     setAnswer("");
@@ -172,6 +209,7 @@ export default function Home() {
   // -- setup ---------------------------------------------------------------
 
   if (stage === "setup") {
+    const resumeRound = mode?.key === RESUME_MODE;
     return (
       <div className={styles.page}>
         <header className={styles.header}>
@@ -191,7 +229,9 @@ export default function Home() {
         {error && <p className={styles.error}>{error}</p>}
 
         <section>
-          <h2 className={styles.sectionTitle}>Pick a mode</h2>
+          <h2 className={styles.sectionTitle}>
+            <span className={styles.stepMark}>1</span> Choose the round
+          </h2>
           <div className={styles.modeGrid}>
             {system?.modes.map((m) => (
               <button
@@ -199,7 +239,9 @@ export default function Home() {
                 className={`${styles.modeCard} ${
                   mode?.key === m.key ? styles.modeCardActive : ""
                 }`}
-                onClick={() => setMode(m)}
+                onClick={() => pickMode(m)}
+                disabled={busy}
+                aria-pressed={mode?.key === m.key}
               >
                 <span className={styles.modeName}>{m.name}</span>
                 <span className={styles.modeBlurb}>{m.blurb}</span>
@@ -215,57 +257,109 @@ export default function Home() {
           </div>
         </section>
 
-        <section className={styles.form}>
-          <h2 className={styles.sectionTitle}>About you</h2>
-          <div className={styles.row}>
-            <label className={styles.field}>
-              Target role
-              <input value={role} onChange={(e) => setRole(e.target.value)} />
-              <span className={styles.hint}>
-                {mode?.key === "resume_projects"
-                  ? "Calibrates the round. This mode examines your own projects, so nothing is searched - the questions come from your résumé."
-                  : "Drives the research - what this role's interviews actually cover gets looked up before you start."}
-              </span>
-            </label>
-            <label className={styles.field}>
-              Level
-              <input value={level} onChange={(e) => setLevel(e.target.value)} />
-            </label>
-          </div>
+        {/* Step 2 stays out of the way until a round is picked. Showing the
+            whole form up front is what made choosing a round feel like it
+            did nothing and the questions below feel like a re-ask. */}
+        {!mode && !bridgeError && (
+          <p className={styles.stepWaiting}>
+            Pick a round above and the rest of the setup appears here.
+          </p>
+        )}
 
-          <label className={styles.field}>
-            Résumé
-            <span className={styles.hint}>
-              Paste it, or drop in a PDF. Required - the interview is built
-              around it, digested before the first question.
-            </span>
-            <textarea
-              rows={8}
-              value={resume}
-              placeholder="Projects, skills, education..."
-              onChange={(e) => setResume(e.target.value)}
+        {mode && busy && (
+          <section>
+            <h2 className={styles.sectionTitle}>Setting up</h2>
+            <StartingUp
+              steps={
+                resumeRound
+                  ? [
+                      "Digesting your résumé",
+                      "Working out what your own projects make it fair to examine",
+                      "Writing the opening question",
+                    ]
+                  : [
+                      "Digesting your résumé",
+                      `Researching what ${role || "this role"} interviews actually ask a ${level.toLowerCase() || "candidate"}`,
+                      "Writing the opening question",
+                    ]
+              }
+              note="Usually fifteen to thirty seconds. It only happens once - every question after this one comes back much faster."
             />
-          </label>
-          <input
-            type="file"
-            accept="application/pdf"
-            className={styles.file}
-            onChange={(e) => handleResumeFile(e.target.files?.[0])}
-          />
-          {parsing && <p className={styles.hint}>Reading the PDF...</p>}
+          </section>
+        )}
 
-          <button
-            className={styles.primary}
-            onClick={handleStart}
-            disabled={busy || !mode || !resume.trim() || !!bridgeError}
-          >
-            {busy
-              ? mode?.key === "resume_projects"
-                ? "Reading your résumé..."
-                : `Reading up on ${role || "this role"}'s interviews...`
-              : "Start interview"}
-          </button>
-        </section>
+        {mode && !busy && (
+          <section className={styles.form}>
+            <h2 className={styles.sectionTitle}>
+              <span className={styles.stepMark}>2</span> About you
+            </h2>
+            <p className={styles.chosen}>
+              <strong>{mode.name}</strong> &mdash; {mode.blurb}
+            </p>
+
+            <div className={styles.row}>
+              <label className={styles.field}>
+                Target role {resumeRound && <em className={styles.optional}>optional</em>}
+                <input
+                  value={role}
+                  placeholder={resumeRound ? "e.g. Backend Engineer" : ""}
+                  onChange={(e) => {
+                    roleEdited.current = true;
+                    setRole(e.target.value);
+                  }}
+                />
+                <span className={styles.hint}>
+                  {resumeRound
+                    ? "This round runs on your own projects, so nothing is searched. It only calibrates how hard the questions are."
+                    : "Filled in from the round you picked - change it if you are aiming somewhere more specific. What this role's interviews actually cover gets looked up before you start."}
+                </span>
+              </label>
+              <label className={styles.field}>
+                Level
+                <input value={level} onChange={(e) => setLevel(e.target.value)} />
+              </label>
+            </div>
+
+            <label className={styles.field}>
+              Résumé
+              <span className={styles.hint}>
+                Paste it, or drop in a PDF. Required - the interview is built
+                around it, digested before the first question.
+              </span>
+              <textarea
+                rows={8}
+                value={resume}
+                placeholder="Projects, skills, education..."
+                onChange={(e) => setResume(e.target.value)}
+              />
+            </label>
+            <input
+              type="file"
+              accept="application/pdf"
+              className={styles.file}
+              disabled={parsing}
+              onChange={(e) => handleResumeFile(e.target.files?.[0])}
+            />
+            {parsing && (
+              <p className={styles.hint}>
+                <Dots label="Reading the PDF" />
+              </p>
+            )}
+
+            <button
+              className={styles.primary}
+              onClick={handleStart}
+              disabled={!resume.trim() || parsing || !!bridgeError}
+            >
+              Start interview
+            </button>
+            {!resume.trim() && (
+              <span className={styles.hint}>
+                Add your résumé to start.
+              </span>
+            )}
+          </section>
+        )}
 
         {system && (
           <section>
@@ -298,7 +392,7 @@ export default function Home() {
           </div>
           {!report.grounded && (
             <p className={styles.hint}>
-              {session.mode.key === "resume_projects"
+              {session.mode.key === RESUME_MODE
                 ? "A competency map couldn't be built from the résumé for this session - this scorecard is based on the transcript alone."
                 : "Research wasn't available for this session - this scorecard is based on the model's own knowledge of the role, not a live search."}
             </p>
@@ -440,6 +534,25 @@ export default function Home() {
   // -- interview -----------------------------------------------------------
 
   if (!session) return null;
+
+  // Ending the interview waits on every background judgement still in
+  // flight plus the scorecard write - easily fifteen seconds, and the
+  // transcript behind it is no longer the thing to look at.
+  if (finishing) {
+    return (
+      <div className={styles.page}>
+        <header className={styles.header}>
+          <h1>Writing your report</h1>
+          <p className={styles.meta}>
+            {session.mode.name} · {session.turns.length} question
+            {session.turns.length === 1 ? "" : "s"}
+          </p>
+        </header>
+        <BuildingReport />
+      </div>
+    );
+  }
+
   const micLive = micStatus === "listening" || micStatus === "connecting";
 
   return (
@@ -479,7 +592,7 @@ export default function Home() {
         <button className={styles.ghost} onClick={finish} disabled={busy}>
           End interview
         </button>
-        <button className={styles.ghost} onClick={restart}>
+        <button className={styles.ghost} onClick={restart} disabled={busy}>
           Reset
         </button>
       </aside>
@@ -487,18 +600,29 @@ export default function Home() {
       <main className={styles.main}>
         {error && <p className={styles.error}>{error}</p>}
 
-        {session.turns.map((t, i) => (
-          <article key={i} className={styles.turn}>
-            <p className={styles.question}>{t.question}</p>
-            {t.answer !== null && (
-              <p className={styles.answerText}>
-                {t.skipped ? <em>skipped</em> : t.answer}
-              </p>
-            )}
-          </article>
-        ))}
+        {session.turns.map((t, i) => {
+          const last = i === session.turns.length - 1;
+          // Show what they submitted straight away, before the server has
+          // echoed it back onto the turn.
+          const shown =
+            t.answer !== null
+              ? { text: t.answer, skipped: t.skipped }
+              : last && pending
+                ? pending
+                : null;
+          return (
+            <article key={i} className={styles.turn}>
+              <p className={styles.question}>{t.question}</p>
+              {shown && (
+                <p className={styles.answerText}>
+                  {shown.skipped ? <em>skipped</em> : shown.text}
+                </p>
+              )}
+            </article>
+          );
+        })}
 
-        {awaitingAnswer && (
+        {awaitingAnswer && !busy && (
           <div className={styles.composer}>
             <textarea
               rows={5}
@@ -547,7 +671,7 @@ export default function Home() {
           </div>
         )}
 
-        {busy && !awaitingAnswer && <p className={styles.hint}>Working...</p>}
+        {busy && !finishing && <ThinkingTurn />}
       </main>
     </div>
   );
