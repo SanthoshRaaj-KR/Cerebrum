@@ -60,7 +60,13 @@ def system_info() -> dict[str, Any]:
         "researchEnabled": settings.research_enabled,
         "researchProviders": settings.research_providers,
         "modes": [
-            {"key": m.key, "name": m.name, "blurb": m.blurb, "dims": list(m.dims)}
+            {
+                "key": m.key,
+                "name": m.name,
+                "blurb": m.blurb,
+                "dims": list(m.dims),
+                "defaultRole": m.default_role,
+            }
             for m in (prompts.get(k) for k in settings.modes)
         ],
     }

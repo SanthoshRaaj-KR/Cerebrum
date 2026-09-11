@@ -5,6 +5,8 @@ BLURB = (
 )
 DIMS = ("Correctness", "Depth", "Communication")
 
+DEFAULT_ROLE = "Backend Engineer"
+
 PROMPT = """\
 MODE: SDE and Backend engineering.
 

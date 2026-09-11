@@ -5,6 +5,8 @@ BLURB = (
 )
 DIMS = ("Correctness", "Understanding", "Clarity")
 
+DEFAULT_ROLE = "Software Engineer"
+
 PROMPT = """\
 MODE: Computer fundamentals - operating systems, computer networks, and
 database management systems.

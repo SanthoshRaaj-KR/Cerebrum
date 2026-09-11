@@ -5,6 +5,8 @@ BLURB = (
 )
 DIMS = ("Modelling", "Extensibility", "Clarity")
 
+DEFAULT_ROLE = "Software Engineer"
+
 PROMPT = """\
 MODE: System Design, low level (LLD) / object-oriented design.
 

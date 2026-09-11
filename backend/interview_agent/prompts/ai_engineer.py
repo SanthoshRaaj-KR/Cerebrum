@@ -5,6 +5,8 @@ BLURB = (
 )
 DIMS = ("Correctness", "Depth", "Evidence")
 
+DEFAULT_ROLE = "AI Engineer"
+
 PROMPT = """\
 MODE: AI Engineer (LLM and Generative AI).
 

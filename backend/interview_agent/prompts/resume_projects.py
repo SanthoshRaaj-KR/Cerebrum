@@ -5,6 +5,10 @@ BLURB = (
 )
 DIMS = ("Ownership", "Depth", "Reflection")
 
+# This round runs off the candidate's own projects, so there is no role to
+# search for and nothing sensible to prefill - they type their own target.
+DEFAULT_ROLE = ""
+
 PROMPT = """\
 MODE: Résumé and projects.
 

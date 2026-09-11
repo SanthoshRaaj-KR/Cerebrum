@@ -6,9 +6,9 @@ like. What used to be a separate "role" axis is just free text the
 candidate types (see context.CandidateContext), because in practice the
 mode is what decides which questions get asked.
 
-Adding a mode means: add a module here exporting NAME/BLURB/DIMS/PROMPT,
-register it in _MODES below, and add its key to config.yaml's
-interviewer.modes.
+Adding a mode means: add a module here exporting
+NAME/BLURB/DIMS/DEFAULT_ROLE/PROMPT, register it in _MODES below, and add
+its key to config.yaml's interviewer.modes.
 """
 
 from __future__ import annotations
@@ -32,6 +32,13 @@ class Mode:
     name: str
     blurb: str
     dims: tuple[str, ...]
+    # What target role this round implies, used to prefill the setup form so
+    # the candidate confirms a sensible default instead of retyping what the
+    # mode already said. It lives with the mode rather than in the console
+    # because the mode is what knows it - and because a console guessing at
+    # it is how "AI Engineer" ends up researching backend interviews.
+    # Empty for rounds with no external role to search for.
+    default_role: str
     prompt: str
 
 
@@ -41,6 +48,7 @@ def _mode(key: str, module) -> Mode:
         name=module.NAME,
         blurb=module.BLURB,
         dims=tuple(module.DIMS),
+        default_role=getattr(module, "DEFAULT_ROLE", ""),
         prompt=module.PROMPT,
     )
 

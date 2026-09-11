@@ -10,6 +10,10 @@ export type Mode = {
   /** Shown on the setup card as a preview of what this mode is about - not
    * a live rubric any more. Nothing is scored until the report. */
   dims: string[];
+  /** The target role this round implies, used to prefill the setup form.
+   * Comes from the mode module, so the console never has to guess - empty
+   * for the résumé round, which has no role to search for. */
+  defaultRole: string;
 };
 
 /** The real configuration, read off /api/health rather than hardcoded in

@@ -5,6 +5,8 @@ BLURB = (
 )
 DIMS = ("Scoping", "Trade-offs", "Depth")
 
+DEFAULT_ROLE = "Software Engineer"
+
 PROMPT = """\
 MODE: System Design, high level (HLD).
 
