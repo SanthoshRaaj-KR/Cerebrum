@@ -291,12 +291,18 @@ class InterviewSession:
         # and picks the move), or the deterministic path does. The
         # invariants below run identically for both - the agent is not
         # trusted with the ledger, the cap, or the background scorer.
+        # Once the wrap-up question has gone out, this answer is the last
+        # one: there is no next move to decide, so don't run the agent loop
+        # to write a question the guard below would only throw away. The
+        # read itself still has to happen - the ledger and the scorecard
+        # both want it - so it falls through to the direct call. The
+        # deterministic path has always short-circuited here; this is the
+        # agent path matching it.
         decision = None
-        if settings.coordinator == "agent":
-            closing = self._closing_now()
-            decision = await agent.run_turn(self, current, closing)
-            if closing and not decision.fell_back:
-                self._final_turn_sent = True
+        agent_closing = False
+        if settings.coordinator == "agent" and not self._final_turn_sent:
+            agent_closing = self._closing_now()
+            decision = await agent.run_turn(self, current, agent_closing)
             current.note = decision.note
 
         if current.note is None:
@@ -349,6 +355,13 @@ class InterviewSession:
                 self.finished = True
                 return None
             if decision.question:
+                # The agent was told this was the wrap-up turn, so the
+                # question it just wrote is the last one. Mark that only now,
+                # as the question actually goes out - marking it before the
+                # guard above would make the guard swallow the wrap-up and
+                # end the interview a question early, with no close at all.
+                if agent_closing:
+                    self._final_turn_sent = True
                 turn = Turn(question=decision.question)
                 self.turns.append(turn)
                 return turn

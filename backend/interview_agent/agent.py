@@ -275,6 +275,11 @@ async def run_turn(session, current, closing: bool) -> TurnDecision:
                     session._rubric(),
                     prior_read,
                 )
+                # Publish it onto the turn straight away. The questionnaire's
+                # private note is read back off session.turns, so holding this
+                # until run_turn returns would steer the question we are about
+                # to write with the PREVIOUS answer's read.
+                current.note = decision.note
                 result = decision.note.to_dict()
 
             elif name == "next_question":
