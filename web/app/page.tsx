@@ -15,6 +15,7 @@ import {
   submitAnswer,
 } from "@/lib/api";
 import { MicSession, MicStatus } from "@/lib/webrtc";
+import { Pipeline, PipelineCompact } from "./pipeline";
 
 type Stage = "setup" | "interview" | "report";
 
@@ -177,7 +178,10 @@ export default function Home() {
           <h1>Cerebrum</h1>
           {system && (
             <p className={styles.meta}>
-              {system.model} · up to {system.maxQuestions} questions ·{" "}
+              asks <strong>{system.model}</strong> · judges{" "}
+              <strong>{system.scorerModel}</strong> · turns driven by{" "}
+              <strong>{system.coordinator === "agent" ? "main agent" : "code"}</strong>{" "}
+              · {system.minQuestions}&ndash;{system.maxQuestions} questions ·{" "}
               {system.fresher ? "fresher calibration" : "experienced calibration"}
             </p>
           )}
@@ -218,8 +222,9 @@ export default function Home() {
               Target role
               <input value={role} onChange={(e) => setRole(e.target.value)} />
               <span className={styles.hint}>
-                Drives the research - what this role&apos;s interviews actually
-                cover gets looked up before you start.
+                {mode?.key === "resume_projects"
+                  ? "Calibrates the round. This mode examines your own projects, so nothing is searched - the questions come from your résumé."
+                  : "Drives the research - what this role's interviews actually cover gets looked up before you start."}
               </span>
             </label>
             <label className={styles.field}>
@@ -254,9 +259,20 @@ export default function Home() {
             onClick={handleStart}
             disabled={busy || !mode || !resume.trim() || !!bridgeError}
           >
-            {busy ? `Reading up on ${role || "this role"}'s interviews...` : "Start interview"}
+            {busy
+              ? mode?.key === "resume_projects"
+                ? "Reading your résumé..."
+                : `Reading up on ${role || "this role"}'s interviews...`
+              : "Start interview"}
           </button>
         </section>
+
+        {system && (
+          <section>
+            <h2 className={styles.sectionTitle}>How this interview runs</h2>
+            <Pipeline system={system} modeKey={mode?.key ?? ""} />
+          </section>
+        )}
       </div>
     );
   }
@@ -282,8 +298,9 @@ export default function Home() {
           </div>
           {!report.grounded && (
             <p className={styles.hint}>
-              Research wasn&apos;t available for this session - this scorecard is
-              based on the model&apos;s own knowledge of the role, not a live search.
+              {session.mode.key === "resume_projects"
+                ? "A competency map couldn't be built from the résumé for this session - this scorecard is based on the transcript alone."
+                : "Research wasn't available for this session - this scorecard is based on the model's own knowledge of the role, not a live search."}
             </p>
           )}
         </section>
@@ -359,6 +376,48 @@ export default function Home() {
           </section>
         )}
 
+        {system && (
+          <section>
+            <h2 className={styles.sectionTitle}>How this was judged</h2>
+            <ul className={styles.guardrails}>
+              <li>
+                <strong>Every answer was judged on its own, as you went.</strong>{" "}
+                Each one went to <code>{system.scorerModel}</code> in the
+                background while you were already reading the next question -
+                so it got real attention rather than a skim during one pass at
+                the end. This scorecard is written from those judgements plus
+                the full transcript.
+              </li>
+              <li>
+                <strong>Nothing above was visible during the interview.</strong>{" "}
+                The interviewer formed a view every turn and never showed it:
+                the agent that judged and the agent that spoke were separate
+                calls, and only the second one was allowed to produce words you
+                saw.
+              </li>
+              {system.doubleCheckWrong && (
+                <li>
+                  <strong>Wrong answers were double-checked.</strong> Any answer
+                  the fast read called incorrect got a second, focused opinion
+                  on <code>{system.scorerModel}</code> before it counted against
+                  you - a vague-but-right answer isn&apos;t a wrong one.
+                </li>
+              )}
+              <li>
+                <strong>Graded against a fresher bar, not a senior one.</strong>{" "}
+                The question is whether a company would hire you at this level -
+                naming a concept, a worked example, and reasoning about one
+                trade-off out loud is a solid answer. An honest &quot;I don&apos;t
+                know&quot; costs far less than a confident wrong claim.
+              </li>
+              <li>
+                <strong>Nothing was scored on speed.</strong> There was no clock;
+                how long you took to answer is not an input to any of this.
+              </li>
+            </ul>
+          </section>
+        )}
+
         <section>
           <h2 className={styles.sectionTitle}>Transcript</h2>
           {session.turns.map((t, i) => (
@@ -406,6 +465,14 @@ export default function Home() {
               ))}
             </ul>
           </div>
+        )}
+
+        {system && (
+          <PipelineCompact
+            system={system}
+            modeKey={session.mode.key}
+            brief={session.researchBrief}
+          />
         )}
 
         <span className={styles.spacer} />

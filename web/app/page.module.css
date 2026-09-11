@@ -489,3 +489,182 @@
   font-size: 0.9375rem;
   line-height: 1.6;
 }
+
+/* -- how it works -------------------------------------------------------
+   The architecture panel (pipeline.tsx). Everything it renders comes from
+   /api/health and the live session, so this is styling only - there are no
+   facts about the system encoded here. */
+
+.pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--panel);
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr;
+  gap: 0.875rem;
+  padding: 1.125rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.stageNum {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  height: 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stageBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.stageTitle {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.actors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.actor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.6875rem;
+  color: var(--ink);
+  background: rgba(224, 140, 46, 0.07);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.1875rem 0.4375rem;
+}
+
+.actorModel {
+  font-style: normal;
+  color: var(--muted);
+  border-left: 1px solid var(--line);
+  padding-left: 0.4375rem;
+}
+
+.stageText {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* The invariants, as a plain list - these are the claims worth making, so
+   they read as sentences rather than as more chips. */
+.guardrails {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 1.125rem 1.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.pipeline .guardrails {
+  border-top: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.guardrails strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.guardrails code {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
+/* Standalone (report screen) - no panel wrapper, so it needs its own. */
+.page > section > .guardrails {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--panel);
+}
+
+/* -- sidebar: what's running -------------------------------------------- */
+
+.runningBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.runList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  font-size: 0.75rem;
+}
+
+.runList > div {
+  display: grid;
+  grid-template-columns: 4rem 1fr;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.runList dt {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.6875rem;
+}
+
+.runList dd {
+  font-family: var(--font-geist-mono), monospace;
+  color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.runList dd em {
+  display: block;
+  font-style: normal;
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.provenance {
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--muted);
+  padding-top: 0.25rem;
+}
+
+@media (max-width: 48rem) {
+  .stage {
+    grid-template-columns: 1fr;
+    gap: 0.625rem;
+  }
+
+  .stageNum {
+    width: 1.75rem;
+  }
+}

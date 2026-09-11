@@ -24,6 +24,7 @@ from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCRequestHandler,
 )
 
+from interview_agent import gateway
 from interview_agent import interviewer as interviewer_mod
 from interview_agent import pipeline as pipeline_mod
 from interview_agent import profile as profile_mod
@@ -52,8 +53,12 @@ def system_info() -> dict[str, Any]:
         "model": settings.model,
         "scorerModel": settings.scorer_model,
         "coordinator": settings.coordinator,
+        "doubleCheckWrong": settings.double_check_wrong,
         "fresher": settings.fresher,
+        "minQuestions": settings.min_questions,
         "maxQuestions": settings.max_questions,
+        "researchEnabled": settings.research_enabled,
+        "researchProviders": settings.research_providers,
         "modes": [
             {"key": m.key, "name": m.name, "blurb": m.blurb, "dims": list(m.dims)}
             for m in (prompts.get(k) for k in settings.modes)
@@ -77,11 +82,20 @@ def _session_state(session: interviewer_mod.InterviewSession) -> dict:
             "closing": session.closing,
         },
         "turns": [t.to_dict() for t in session.turns],
+        # real_questions is deliberately NOT sent. It's the calibration set
+        # the brief was distilled from - shipping it to the browser mid-
+        # interview would put a crib sheet one devtools tab away from the
+        # person being interviewed.
         "researchBrief": (
             {
                 "grounded": session.brief.grounded,
+                # Where this brief came from, so the console can say so
+                # honestly: a live role search, or the candidate's own
+                # résumé via the gateway agent.
+                "source": (
+                    "resume" if session.mode_key == gateway.MODE_KEY else "research"
+                ),
                 "competencies": [c.name for c in session.brief.competencies],
-                "realQuestions": session.brief.real_questions,
                 "sources": session.brief.sources,
             }
             if session.brief

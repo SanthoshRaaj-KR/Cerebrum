@@ -12,10 +12,26 @@ export type Mode = {
   dims: string[];
 };
 
+/** The real configuration, read off /api/health rather than hardcoded in
+ * the console. Everything the "how this works" panel shows comes from
+ * here, so what the screen claims and what the backend does cannot drift
+ * apart. */
 export type SystemInfo = {
+  /** Asks the questions and, in agent mode, drives the turn. */
   model: string;
+  /** Judges: the background per-answer score and the wrong-claim recheck. */
+  scorerModel: string;
+  /** Who decides the next move - the LLM main agent, or the deterministic
+   * ladder. Both enforce the same invariants in code. */
+  coordinator: "code" | "agent";
+  /** Whether a `wrong` read gets a second opinion before it counts. */
+  doubleCheckWrong: boolean;
   fresher: boolean;
+  minQuestions: number;
   maxQuestions: number;
+  researchEnabled: boolean;
+  /** Search providers in fallback order, e.g. ["tavily", "brave"]. */
+  researchProviders: string[];
   modes: Mode[];
 };
 
@@ -37,8 +53,11 @@ export type Pacing = {
 
 export type ResearchBrief = {
   grounded: boolean;
+  /** Where the competency map came from: a live role search, or the
+   * candidate's own résumé via the gateway agent (résumé mode has no
+   * external syllabus to search). */
+  source: "research" | "resume";
   competencies: string[];
-  realQuestions: string[];
   sources: string[];
 };
 
