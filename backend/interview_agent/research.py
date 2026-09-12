@@ -19,6 +19,7 @@ role shouldn't pay for the search or the distillation call again.
 
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 import logging
@@ -150,18 +151,28 @@ def _save_cache(key: str, brief: RoleBrief) -> None:
 # -- search --------------------------------------------------------------
 
 
-async def _gather_raw(role: str) -> tuple[str, list[str]]:
+async def _gather_raw(role: str, mode: Mode) -> tuple[str, list[str]]:
     """Runs the searches, returns (digest text for the LLM, source urls).
 
-    Three angles rather than one query: what's actually asked, what's
-    actually required, and the entry-level framing specifically - a bare
-    "{role} interview questions" search skews toward senior content. The
-    provider (Tavily, Brave, ...) is chosen by search.gather.
+    Four angles rather than one: what is actually asked, what is asked
+    RIGHT NOW, what the role actually requires, and the entry-level framing
+    specifically - a bare "{role} interview questions" search skews hard
+    toward senior content.
+
+    The recency query carries the current year explicitly. Interview content
+    dates faster than it looks: the questions an AI engineer gets asked
+    moved more in the last two years than a backend syllabus moved in ten,
+    and a search that does not say "this year" happily returns a listicle
+    from 2019. The mode name goes in too, so an LLD round pulls
+    object-design questions rather than whatever the role is asked in
+    general.
     """
+    year = datetime.date.today().year
     queries = [
         f"{role} fresher interview questions asked",
-        f"entry level {role} technical interview questions",
-        f"{role} fresher job description required skills",
+        f"most asked {role} interview questions {year}",
+        f"entry level {role} technical interview questions {mode.name}",
+        f"{role} fresher job description required skills {year}",
     ]
     outcome = await search.gather(queries, settings.research_max_results)
 
@@ -210,6 +221,9 @@ You are preparing an interviewer's background brief on a role, before a
 real mock interview starts. Distill what actually matters for a FRESHER /
 entry-level candidate applying for: {role} (a {mode_name} round).
 
+It is {today}. Where the sources disagree, or where something has clearly
+moved on, weight what is being asked NOW over what used to be standard.
+
 {digest_block}
 
 Produce:
@@ -221,9 +235,10 @@ Produce:
   open into this area from a candidate's own project or a scenario - not a
   list of exam questions).
 - real_questions: pull actual interview questions out of the sources if
-  they contain any, verbatim or lightly cleaned up. Empty list if the
-  sources gave you nothing concrete to quote - do not invent questions to
-  fill this field.
+  they contain any, verbatim or lightly cleaned up, favouring the ones that
+  show up again and again - those are what this role is really being asked.
+  Empty list if the sources gave you nothing concrete to quote; do not
+  invent questions to fill this field.
 - red_flags: 3-6 claims specific to this role that a fresher might
   plausibly say and that an interviewer must not let pass unchallenged - a
   security misconception, a wrong claim about how something works, a tool
@@ -254,7 +269,10 @@ async def _distill(role: str, mode: Mode, digest: str) -> RoleBrief:
             {
                 "role": "system",
                 "content": _DISTILL_PROMPT.format(
-                    role=role, mode_name=mode.name, digest_block=_digest_block(digest)
+                    role=role,
+                    mode_name=mode.name,
+                    today=datetime.date.today().strftime("%B %Y"),
+                    digest_block=_digest_block(digest),
                 ),
             },
             {"role": "user", "content": f"Role: {role}\nRound: {mode.name} - {mode.blurb}"},
@@ -308,7 +326,7 @@ async def build_brief(candidate: CandidateContext, mode: Mode) -> RoleBrief:
 
     digest, sources = "", []
     try:
-        digest, sources = await _gather_raw(role)
+        digest, sources = await _gather_raw(role, mode)
     except Exception:  # noqa: BLE001
         logger.exception("could not gather role research")
 
