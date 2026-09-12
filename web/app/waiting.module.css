@@ -9,10 +9,27 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  padding: var(--space-6);
-  border: 1px solid var(--border);
+  padding: var(--space-7) var(--space-6);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  background: var(--surface);
+  background: var(--glass);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  box-shadow: var(--shadow-lg);
+  /* Centred in the viewport rather than pinned to the top: this is the
+     only thing on screen for twenty seconds, and a lone card at the top of
+     an empty page reads as something that failed to finish loading. */
+  margin-block: auto;
+  text-align: center;
+  align-items: center;
+  max-width: 34rem;
+  margin-inline: auto;
+}
+
+.waiting .waitSteps,
+.waiting .waitNote {
+  text-align: left;
+  width: 100%;
 }
 
 .waitTitle {
@@ -151,5 +168,75 @@
   .waitSteps li::before,
   .dots i {
     opacity: 1;
+  }
+}
+
+/* -- the thinking mark ----------------------------------------------------
+   Two rings orbiting the wordmark's C. Carries no information, which is
+   why it is the first thing to stop under reduced motion. */
+
+.mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 5.5rem;
+  height: 5.5rem;
+  margin-inline: auto;
+}
+
+.markCore {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(140deg, var(--accent), var(--accent-hover));
+  color: var(--accent-text);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  box-shadow: var(--glow-accent);
+}
+
+.markRing,
+.markRing2 {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  /* Only two of four sides are coloured, so the rotation is visible - a
+     fully drawn circle spinning looks static. */
+  border-top-color: var(--accent);
+  border-right-color: var(--accent);
+}
+
+.markRing {
+  inset: 0;
+  animation: orbit 2.6s linear infinite;
+}
+
+.markRing2 {
+  inset: 0.7rem;
+  border-top-color: transparent;
+  border-bottom-color: var(--accent);
+  border-left-color: var(--accent);
+  opacity: 0.6;
+  animation: orbit 1.9s linear infinite reverse;
+}
+
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.waitBar {
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markRing,
+  .markRing2 {
+    animation: none;
+    opacity: 0.35;
   }
 }
