@@ -281,3 +281,89 @@ all verified at 4.5:1 or better on their own surface:
 
 Per `color-not-only`, none of these ever carries meaning alone - every
 status in the report is a word first and a colour second.
+
+---
+
+## Revision: depth and motion
+
+The first build was correct and flat. The product behind it is not flat —
+it researches a role, escalates difficulty, and writes a per-answer
+analysis — and a screen that reports all of that as text in boxes
+undersells it. This revision adds depth and motion without touching the
+identity: same accent, same superfamily, same three-layer tokens.
+
+### Depth
+
+Three new semantic tokens per theme, in `tokens.css`:
+
+| Token | What it is for |
+|---|---|
+| `--glass` / `--glass-border` / `--glass-blur` | Panels that sit *on* the ambient field rather than covering it |
+| `--glow-accent` / `--glow-ok` / `--glow-bad` | Emphasis on the one element per screen that deserves it |
+| `--mesh-1..3` | The three stops of the ambient gradient field |
+| `--rail` | The line a timeline or stepper is drawn on |
+
+Two rules hold:
+
+- **Glass is opt-in per panel.** `backdrop-filter` is one of the few
+  properties that genuinely costs something to composite, and a page where
+  everything is glass has no hierarchy left to express.
+- **Glass never carries long-form text.** `GlassCard solid` exists for
+  that. A paragraph read through a blurred gradient is a paragraph read
+  slowly, and the report is made of paragraphs.
+
+Dark gets *more* mesh and *more opaque* surfaces than light. Glass over a
+near-black ground loses its edge entirely; light needs the opposite
+restraint, because a coloured wash under long-form reading is the fastest
+way to make a report tiring.
+
+### Motion
+
+The motion dial moved from Subtle to Complex. One vocabulary in
+`web/app/motion.ts`; nothing picks its own timing.
+
+| | |
+|---|---|
+| Arrive | 320ms, `cubic-bezier(0.16, 1, 0.3, 1)` — decelerating |
+| Leave | 210ms, `cubic-bezier(0.7, 0, 0.84, 0)` — accelerating, ~65% of arrival |
+| Values | Spring, never a duration |
+| Stagger | 45ms per item |
+
+Three rules, from `duration-timing`, `exit-faster-than-enter` and
+`spring-physics`:
+
+1. Arrivals decelerate, departures accelerate. Reversing this is the most
+   common reason motion feels wrong without anyone being able to say why.
+2. An exit is quicker than its entrance. A UI that takes as long to get
+   out of the way as it took to arrive feels like it is arguing with you.
+3. Anything tracking a real value — a score, a meter, a position — uses a
+   spring, so the number reads as having settled rather than as an
+   animation having finished.
+
+**Reduced motion is handled once**, by `<MotionConfig reducedMotion="user">`
+at the root, with CSS guards on the handful of animations written in CSS
+and the blanket `globals.css` rule as backstop. Per-component guards would
+be four dozen chances to forget, and the one that forgot would be the one
+that made somebody feel ill.
+
+### Charts
+
+Hand-rolled SVG — score ring, competency radar, score sparkline, bars.
+Four shapes, none needing axes, zoom or a legend engine; a charting
+dependency would cost more than it saved and would fight the tokens for
+control of colour.
+
+Per `color-not-only`, **every chart sits beside the fact it draws**: the
+ring beside the number, the radar above the competency table, the
+sparkline above the list. None is the only route to its information, which
+is what makes it safe to draw in colour and shape alone — and what lets
+the radar be dropped entirely below 56rem without losing anything.
+
+### The one thing motion is not allowed to do
+
+The interview screen may not express a judgement. The coverage
+constellation uses exactly one colour: a node is lit or it is not. A
+second colour would inevitably come to mean *and it went well*, and the
+whole judge/speak split exists so that opinion cannot reach the candidate
+mid-interview. Leaking it through a chart rather than a sentence would be
+worse, not better.
