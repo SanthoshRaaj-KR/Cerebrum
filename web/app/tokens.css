@@ -89,12 +89,29 @@
   --shadow-md: 0 2px 8px rgba(2, 6, 23, 0.08);
   --shadow-lg: 0 8px 28px rgba(2, 6, 23, 0.12);
 
-  /* Motion. Density and motion dials were set low: this is an assessment
-     tool, so movement explains a change and never entertains. */
+  /* Motion.
+   *
+   * Every animation in the console picks from these, so the whole product
+   * moves with one rhythm rather than each screen inventing its own.
+   *
+   * Two rules encoded here. Arrivals decelerate and departures accelerate,
+   * because that is how things actually move. And an exit is quicker than
+   * its entrance - a UI that takes as long to get out of the way as it did
+   * to arrive feels like it is arguing with you. --dur-exit is ~65% of
+   * --dur-slow deliberately. */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);     /* arriving */
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);      /* leaving */
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
   --dur-fast: 120ms;
   --dur: 200ms;
   --dur-slow: 320ms;
+  --dur-slower: 560ms;
+  --dur-exit: 210ms;
+  /* Entrance offsets. Small: motion that travels far reads as a page
+     rebuilding itself rather than an element arriving. */
+  --lift: 10px;
+  --lift-lg: 20px;
 
   --measure: 68ch; /* 60-75 characters, per line-length. */
 }
@@ -126,6 +143,31 @@
   --bad-wash: rgba(220, 38, 38, 0.08);
 
   --focus: var(--blue-700);
+
+  /* -- depth ------------------------------------------------------------
+     Glass, glow and the mesh field. These are the layer that makes the
+     console read as built rather than drawn, and they are semantic tokens
+     like everything else - no component file gets a hex value.
+
+     The mesh stops are deliberately near-neutral in light: a coloured
+     wash under long-form reading is the fastest way to make a report
+     tiring, and the report is the part people actually read. */
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-blur: 14px;
+
+  --glow-accent: 0 0 0 1px rgba(3, 105, 161, 0.18),
+                 0 8px 30px -8px rgba(3, 105, 161, 0.35);
+  --glow-ok: 0 0 26px -6px rgba(21, 128, 61, 0.4);
+  --glow-bad: 0 0 26px -6px rgba(220, 38, 38, 0.35);
+
+  --mesh-1: rgba(3, 105, 161, 0.13);
+  --mesh-2: rgba(2, 132, 199, 0.09);
+  --mesh-3: rgba(100, 116, 139, 0.08);
+  --mesh-opacity: 1;
+
+  /* The rail a timeline or stepper is drawn on. */
+  --rail: var(--slate-200);
 
   color-scheme: light;
 }
@@ -160,6 +202,25 @@
 
     --focus: var(--blue-400);
 
+    /* Dark carries the mesh better than light does, so it is allowed more
+       of it - but the surfaces go MORE opaque, not less: glass over a
+       near-black ground loses its edge entirely. */
+    --glass: rgba(15, 23, 42, 0.72);
+    --glass-border: rgba(148, 163, 184, 0.14);
+    --glass-blur: 16px;
+
+    --glow-accent: 0 0 0 1px rgba(56, 189, 248, 0.22),
+                   0 8px 34px -8px rgba(56, 189, 248, 0.45);
+    --glow-ok: 0 0 30px -6px rgba(74, 222, 128, 0.42);
+    --glow-bad: 0 0 30px -6px rgba(248, 113, 113, 0.38);
+
+    --mesh-1: rgba(56, 189, 248, 0.2);
+    --mesh-2: rgba(3, 105, 161, 0.22);
+    --mesh-3: rgba(30, 41, 59, 0.5);
+    --mesh-opacity: 1;
+
+    --rail: var(--slate-800);
+
     color-scheme: dark;
   }
 }
@@ -191,6 +252,22 @@
   --bad-wash: rgba(248, 113, 113, 0.12);
 
   --focus: var(--blue-400);
+
+  --glass: rgba(15, 23, 42, 0.72);
+  --glass-border: rgba(148, 163, 184, 0.14);
+  --glass-blur: 16px;
+
+  --glow-accent: 0 0 0 1px rgba(56, 189, 248, 0.22),
+                 0 8px 34px -8px rgba(56, 189, 248, 0.45);
+  --glow-ok: 0 0 30px -6px rgba(74, 222, 128, 0.42);
+  --glow-bad: 0 0 30px -6px rgba(248, 113, 113, 0.38);
+
+  --mesh-1: rgba(56, 189, 248, 0.2);
+  --mesh-2: rgba(3, 105, 161, 0.22);
+  --mesh-3: rgba(30, 41, 59, 0.5);
+  --mesh-opacity: 1;
+
+  --rail: var(--slate-800);
 
   color-scheme: dark;
 }

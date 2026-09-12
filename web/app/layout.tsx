@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./tokens.css";
 import "./globals.css";
+import { Motion } from "./providers";
 
 /* IBM Plex, per design-system/cerebrum/MASTER.md: trustworthy and
  * professional, and built for data. One superfamily in two voices - Sans
@@ -49,7 +50,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <Motion>{children}</Motion>
+      </body>
     </html>
   );
 }
