@@ -1,22 +1,28 @@
 # Cerebrum
 
 A mock interviewer for entry-level candidates that actually behaves like
-one. Pick a mode, paste your résumé, type your target role, and it runs a
-real interview of about half an hour: no fixed question list, no plan to
-fall back on. Before it starts, it looks up what your target role's
-fresher interviews actually cover and researches real questions companies
-have asked; from there it reacts to what you just said - challenging a
-wrong claim, digging into a thin answer, easing off an honest "I don't
-know", moving to new ground once it's satisfied - the way a person running
-the room would, not a quiz working down a list. It ends when it has a read
-on everything worth asking about, not when a timer runs out. Nothing is
-scored to your face: no score, no rubric, no hint of a verdict
-mid-interview, because no real interviewer grades you as you go.
+one. Pick a round - that is the whole of setup - and it runs a real
+interview of about half an hour: no fixed question list, no plan to fall
+back on. Before the first question it looks up what that role is being
+asked right now and distils it into the areas worth examining; from there
+it reacts to what you just said.
+
+Answer well and it goes **up** on that same ground - the trade-off behind
+your choice, the case where your answer stops working. Answer badly and it
+comes at the idea from a more concrete angle to find what you *do* have,
+rather than piling on a gap it has already found. It ends when it has a
+read on everything worth asking about, not when a timer runs out.
+
+Nothing is scored to your face: no score, no rubric, no hint of a verdict
+mid-interview, because no real interviewer grades you as you go. It all
+arrives at the end, as a report that goes through every answer one at a
+time - what you said, what was missing, what a strong answer to that
+question sounds like, and one thing to do differently next time.
 
 ```
-  target role + résumé       researched before question one - a competency map
-      │                      and real fresher questions (Tavily → Brave), plus
-      │                      the résumé digested once into a structured view
+  pick a round               the round IS the role. Researched before
+      │                      question one - what that role is asked right now
+      │                      (Tavily → Brave), distilled into a competency map
       ▼
   the interview loop         one turn at a time, full history in context
       │
@@ -24,19 +30,27 @@ mid-interview, because no real interviewer grades you as you go.
       │                      "wrong" call worth double-checking before it counts
       ├── the move            challenge / redirect / dig / ease off / advance
       ├── questionnaire      writes the one question the candidate sees
-      └── coverage ledger    which competencies still have nothing shown;
-      │                      when none are left, the interview wraps up
+      └── coverage ledger    which competencies still have nothing shown, and
+      │                      how hard each has been pushed - a `strong` answer
+      │                      buys a harder question on that ground next time.
+      │                      When nothing is left open, the interview wraps up
       ▼
-  the scorecard              built from per-answer judgements made in the
-                              background as you went - calibrated to "would a
+  the report                 built from per-answer judgements made in the
+                              background as you went - a verdict, then every
+                              question taken apart, calibrated to "would a
                               company hire this fresher", not a senior bar
 ```
 
-Six modes (Résumé & Projects, SDE & Backend, Computer Fundamentals, System
-Design HLD/LLD, AI Engineer), all calibrated for a fresher candidate by
-default (`candidate.fresher` in `config.yaml`). There's no separate role
-list - you type your own target role and level, and that's what the
-research is grounded in.
+Six rounds - Résumé & Projects, SDE & Backend, Computer Fundamentals,
+System Design HLD/LLD, AI Engineer - all calibrated for a fresher by
+default (`candidate.fresher` in `config.yaml`).
+
+**The round is the role.** Picking "SDE & Backend" already says Backend
+Engineer, so nothing is typed in: each round carries its own
+`DEFAULT_ROLE`, and that is what gets researched. Five of the six start on
+one click. Only Résumé & Projects asks for anything else, and only because
+a résumé is that round's entire syllabus - every other round is a subject
+round that never needed one.
 
 ## What it costs
 
@@ -142,19 +156,29 @@ Check all of them before relying on them:
 `.\start.ps1` puts it on **http://localhost:3000**. Two processes: the
 bridge (`interview_agent.bridge`, on 127.0.0.1:7332) holds the resume
 profile, the interview session state, and the mic's dictation pipeline;
-the web console (`web/app/page.tsx`) is a single page that walks through
-setup → interview → report, talking to the bridge over REST and to the
-mic over WebRTC.
+the web console walks through rounds → interview → report, talking to the
+bridge over REST and to the mic over WebRTC. `page.tsx` owns the state
+machine; each screen is its own file (`rounds`, `interview`, `report`),
+built on shared primitives in `ui.tsx` and the tokens in `tokens.css`.
 
-- **Setup** - pick a mode, type your target role and level, paste or
-  upload a résumé. The résumé is required: it's digested before the first
-  question and the interview is built around it.
-- **Interview** - the actual thing: how far through you are, the
-  competencies research turned up, and the conversation itself. Type an
-  answer or dictate it; nothing is scored here.
-- **Report** - the scorecard once the interview wraps up or you end it
-  early: verdict, per-competency status, strengths, gaps, coach notes, the
-  sources it researched from, and the full transcript.
+- **Rounds** - six cards, and for five of them that is the entire setup:
+  one click and the interview starts. The round carries its own role, and
+  the level comes from `candidate.fresher`, so there is nothing to type.
+  Résumé & Projects gets a second screen, because a résumé is that round's
+  whole syllabus - drop a PDF, choose one, or paste the text.
+- **Interview** - one question at a time, with answered turns receding
+  behind it. A progress bar against the expected length (not the hard
+  ceiling), and once, before the first answer, the plan: how many
+  questions, roughly how long, which areas. Type an answer or dictate it.
+  Nothing evaluative appears here at any point.
+- **Report** - the only evaluative screen. Verdict and score, what held up
+  and what didn't, then **every question taken apart**: what you said,
+  what it showed, what went wrong or was still missing, what a strong
+  answer to that question sounds like, and one thing to do next time.
+  Then the per-area table, coach notes, how it was judged, and sources.
+
+Both themes are supported, light by default, remembered per browser and
+applied before first paint. Everything reads down to 375px.
 
 Nothing here is authenticated - the bridge binds to `127.0.0.1` only, same
 posture as a single-user local tool with nothing to expose beyond this
@@ -162,8 +186,8 @@ machine.
 
 ## How the interview logic works
 
-There's no question plan. Before the first question, two things run:
-`research.py` searches the candidate's target role (Tavily, falling back
+There's no question plan. Before the first question, `research.py`
+searches the round's role (Tavily, falling back
 to Brave - see `search.py`) and distills a `RoleBrief`: a competency map,
 each with a `fresher_bar` (what counts as *having* it at entry level, not
 at a senior level), plus real questions found for calibration, framed
