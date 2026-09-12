@@ -89,6 +89,25 @@ export type CompetencyResult = {
   evidence: string;
 };
 
+/** The background scorer's read on one answer. This is what makes the
+ * report detailed rather than a grade: `gap` says what was missing,
+ * `better` says what a strong answer to that exact question sounds like,
+ * and `improve` is the one thing to do differently next time. */
+export type AnswerVerdict = {
+  index: number;
+  question: string;
+  competency: string;
+  correct: boolean;
+  depth: "solid" | "partial" | "absent";
+  /** What they actually demonstrated. Empty unless the answer was correct. */
+  evidence: string;
+  gap: string;
+  better: string;
+  improve: string;
+  answer: string;
+  skipped: boolean;
+};
+
 export type Scorecard = {
   verdict: "strong_yes" | "yes" | "borderline" | "not_yet";
   score: number;
@@ -99,6 +118,9 @@ export type Scorecard = {
   competencies: CompetencyResult[];
   sources: string[];
   grounded: boolean;
+  /** Per question, in the order they were asked - the working the summary
+   * above was written from. */
+  answers: AnswerVerdict[];
 };
 
 export type SessionReport = SessionState & { scorecard: Scorecard };

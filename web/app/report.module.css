@@ -1,0 +1,337 @@
+/* The report.
+ *
+ * The part of this product people actually read, and the only part that is
+ * allowed to be evaluative. It is long-form by design: a grade tells you
+ * where you stand, and only the question-by-question section tells you
+ * what to do about it.
+ */
+
+/* -- verdict ------------------------------------------------------------- */
+
+.verdict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.verdictTop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.score {
+  display: flex;
+  align-items: baseline;
+  gap: 0.125rem;
+  font-family: var(--font-mono), monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreNum {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.scoreOf {
+  font-size: var(--text-lg);
+  color: var(--text-subtle);
+}
+
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  border: 1px solid currentColor;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.stampStrong_yes,
+.stampYes {
+  color: var(--ok);
+  background: var(--ok-wash);
+}
+
+.stampBorderline {
+  color: var(--warn);
+  background: var(--warn-wash);
+}
+
+.stampNot_yet {
+  color: var(--bad);
+  background: var(--bad-wash);
+}
+
+.headline {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  letter-spacing: -0.02em;
+  max-width: 32ch;
+}
+
+.meta {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* -- two-column summary -------------------------------------------------- */
+
+.split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--space-5);
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.listItem {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--text-muted);
+}
+
+.bullet {
+  flex: none;
+  margin-top: 0.3rem;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--text-subtle);
+}
+
+.bulletOk {
+  background: var(--ok);
+}
+
+.bulletBad {
+  background: var(--bad);
+}
+
+/* -- question by question ------------------------------------------------ */
+
+.qa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* A rule down the side carries the verdict at a glance, without the card
+   itself turning into a block of colour. */
+.itemSolid {
+  border-left: 3px solid var(--ok);
+}
+
+.itemPartial {
+  border-left: 3px solid var(--warn);
+}
+
+.itemAbsent {
+  border-left: 3px solid var(--bad);
+}
+
+.itemHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.qNum {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  margin-bottom: var(--space-1);
+}
+
+.qText {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+}
+
+.itemBody {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Each block is labelled, because the labels are the structure: what you
+   said, what was missing, what good sounds like, what to do next. */
+.block {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.block:last-child {
+  border-bottom: none;
+}
+
+.blockLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+  margin-bottom: var(--space-2);
+}
+
+.blockText {
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--text-muted);
+  max-width: var(--measure);
+}
+
+.yourAnswer {
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
+/* The model answer. Visually distinct because it is the one block that is
+   not about what happened - it is what to aim at. */
+.blockBetter {
+  background: var(--accent-wash);
+}
+
+.blockBetter .blockLabel {
+  color: var(--accent);
+}
+
+.blockBetter .blockText {
+  color: var(--text);
+}
+
+.blockImprove .blockLabel {
+  color: var(--ok);
+}
+
+.blockImprove .blockText {
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+
+/* -- competency table ---------------------------------------------------- */
+
+.table {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.rowName {
+  font-weight: var(--weight-medium);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+.rowEvidence {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-relaxed);
+  margin-top: var(--space-1);
+}
+
+/* -- provenance ---------------------------------------------------------- */
+
+.prov {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--text-muted);
+}
+
+.prov strong {
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+}
+
+.prov code {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  color: var(--accent);
+}
+
+.sources {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.sources a {
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 40rem) {
+  .row {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .headline {
+    font-size: var(--text-xl);
+  }
+
+  .itemHead,
+  .block {
+    padding-inline: var(--space-4);
+  }
+}
