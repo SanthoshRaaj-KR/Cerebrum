@@ -31,9 +31,24 @@ export const metadata: Metadata = {
     "A mock technical interview that researches the role, adapts to your answers, and reports back in detail.",
 };
 
+/* Applies a remembered theme before first paint.
+ *
+ * Without it the page renders in light, then the toggle hydrates and
+ * switches it - a white flash straight in the face of anyone who chose
+ * dark. It has to be inline and it has to be synchronous in <head>, which
+ * is the one thing a React effect cannot be.
+ *
+ * Reading storage is wrapped because it throws outright in some contexts
+ * rather than returning null, and a theme preference is not worth a blank
+ * page. */
+const NO_FLASH = `try{var t=localStorage.getItem('cerebrum-theme');if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t}}catch(e){}`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
+      </head>
       <body>{children}</body>
     </html>
   );

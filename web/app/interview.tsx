@@ -20,7 +20,7 @@
 import { useEffect, useRef } from "react";
 import { SessionState } from "@/lib/api";
 import { MicStatus } from "@/lib/webrtc";
-import { IconArrowRight, IconMic, modeIcon } from "./icons";
+import { IconArrowRight, IconMic, ModeIcon } from "./icons";
 import { Button, Meter, ThemeToggle, ui } from "./ui";
 import { ThinkingTurn } from "./waiting";
 import s from "./interview.module.css";
@@ -54,7 +54,6 @@ export function InterviewScreen({
   onEnd: () => void;
   pending: { text: string; skipped: boolean } | null;
 }) {
-  const Glyph = modeIcon(session.mode.key);
   const { pacing } = session;
   const turns = session.turns;
   const current = turns[turns.length - 1] ?? null;
@@ -75,7 +74,7 @@ export function InterviewScreen({
         <div className={s.barInner}>
           <span className={s.barTitle}>
             <span className={s.barGlyph}>
-              <Glyph size={18} />
+              <ModeIcon mode={session.mode.key} size={18} />
             </span>
             <span>{session.mode.name}</span>
           </span>

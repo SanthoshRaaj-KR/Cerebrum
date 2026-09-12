@@ -3,7 +3,7 @@
 /* Shared primitives. Everything visual in the console is built from these,
  * so a change to how a button or a status badge reads happens once. */
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import s from "./ui.module.css";
 import { IconMoon, IconSun } from "./icons";
 
@@ -104,59 +104,59 @@ export function Meter({
 /**
  * Light/dark toggle.
  *
- * Writes data-theme on <html>, which tokens.css treats as beating the
- * system preference in both directions. The choice is remembered per
- * browser; every read and write is guarded because storage throws outright
- * in some contexts rather than merely coming back empty.
+ * The theme lives on <html data-theme>, not in React - tokens.css reads it
+ * there and an inline script in the layout applies it before first paint,
+ * so a dark-preferring viewer never gets a white flash.
+ *
+ * That makes the DOM the source of truth and React the subscriber, which
+ * is what useSyncExternalStore is for. Reading it into state inside an
+ * effect instead would render once with the wrong icon and then correct
+ * itself - a cascading render, and a visible flicker on the glyph.
  */
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
+const THEME_EVENT = "cerebrum-theme";
 
-  useEffect(() => {
-    let saved: string | null = null;
-    try {
-      saved = localStorage.getItem("cerebrum-theme");
-    } catch {
-      /* storage unavailable - fall through to the system preference */
-    }
-    if (saved === "light" || saved === "dark") {
-      setTheme(saved);
-      document.documentElement.dataset.theme = saved;
-    }
-  }, []);
+function subscribe(onChange: () => void) {
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  media.addEventListener("change", onChange);
+  window.addEventListener(THEME_EVENT, onChange);
+  return () => {
+    media.removeEventListener("change", onChange);
+    window.removeEventListener(THEME_EVENT, onChange);
+  };
+}
+
+function currentTheme(): "light" | "dark" {
+  const set = document.documentElement.dataset.theme;
+  if (set === "light" || set === "dark") return set;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+export function ThemeToggle() {
+  // The server has no way to know the viewer's preference, so it renders
+  // the light-mode glyph; the inline script has already set the real theme
+  // by the time this hydrates.
+  const theme = useSyncExternalStore(subscribe, currentTheme, () => "light" as const);
 
   function flip() {
-    const current =
-      theme ??
-      (window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light");
-    const next = current === "dark" ? "light" : "dark";
-    setTheme(next);
+    const next = theme === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = next;
     try {
       localStorage.setItem("cerebrum-theme", next);
     } catch {
-      /* not being able to remember it is not a reason to refuse the flip */
+      // Not being able to remember the choice is no reason to refuse it.
     }
+    window.dispatchEvent(new Event(THEME_EVENT));
   }
-
-  // Until the effect has run we don't know the effective theme, so the
-  // label would be a guess. Show both glyphs and a neutral name instead of
-  // rendering nothing, which would shift the header on hydration.
-  const known = theme !== null;
 
   return (
     <button
       type="button"
       className={s.themeToggle}
       onClick={flip}
-      aria-label={
-        known
-          ? `Switch to ${theme === "dark" ? "light" : "dark"} theme`
-          : "Switch theme"
-      }
-      title="Switch theme"
+      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+      title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
     >
       {theme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
     </button>

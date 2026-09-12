@@ -151,9 +151,9 @@ export async function extractResume(file: File): Promise<{ text: string }> {
 
 export async function startSession(body: {
   mode: string;
-  role: string;
-  level: string;
-  resume: string;
+  /** Only the résumé round sends one - it is that round's whole syllabus.
+   * The other five are subject rounds and never needed a CV. */
+  resume?: string;
   /** Overrides interview.max_questions for this session. The console never
    * sends this - it's for the quality-check harness, to keep runs short. */
   maxQuestions?: number;

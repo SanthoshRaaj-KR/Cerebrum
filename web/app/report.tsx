@@ -28,7 +28,7 @@ import {
   IconCheck,
   IconCross,
   IconMinus,
-  modeIcon,
+  ModeIcon,
 } from "./icons";
 import { Badge, Button, ThemeToggle, ui } from "./ui";
 import s from "./report.module.css";
@@ -162,7 +162,6 @@ export function ReportScreen({
   system: SystemInfo | null;
   onRestart: () => void;
 }) {
-  const Glyph = modeIcon(session.mode.key);
   const answered = report.answers ?? [];
   const resumeRound = session.mode.key === "resume_projects";
 
@@ -170,7 +169,7 @@ export function ReportScreen({
     <div className={`${ui.page} ${ui.pageWide}`}>
       <header className={s.verdict}>
         <div className={ui.eyebrow}>
-          <Glyph size={14} />
+          <ModeIcon mode={session.mode.key} size={14} />
           {session.mode.name}
           {session.role && ` · ${session.role}`}
           <span className={ui.spacerFlex} />

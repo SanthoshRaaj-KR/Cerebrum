@@ -151,10 +151,7 @@ export const IconMoon = (p: IconProps) => (
 
 /** Which glyph fronts which round. Keyed by the backend's mode key, with
  * a document as the fallback so an unregistered mode still renders. */
-export const MODE_ICONS: Record<
-  string,
-  (p: IconProps) => React.JSX.Element
-> = {
+const MODE_ICONS: Record<string, (p: IconProps) => React.JSX.Element> = {
   resume_projects: IconDocument,
   sde_backend: IconServer,
   computer_fundamentals: IconChip,
@@ -163,6 +160,15 @@ export const MODE_ICONS: Record<
   ai_engineer: IconSpark,
 };
 
-export function modeIcon(key: string) {
-  return MODE_ICONS[key] ?? IconDocument;
+/**
+ * The glyph for a round, as a component rather than a lookup returning one.
+ *
+ * `const Glyph = modeIcon(key)` reads fine but hands React what it treats
+ * as a freshly declared component on every render, which resets any state
+ * inside it and is what the react-hooks rule flags. Doing the lookup in
+ * here keeps the component identity stable.
+ */
+export function ModeIcon({ mode, ...rest }: IconProps & { mode: string }) {
+  const Glyph = MODE_ICONS[mode] ?? IconDocument;
+  return <Glyph {...rest} />;
 }

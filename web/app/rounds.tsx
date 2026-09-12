@@ -16,7 +16,7 @@
 
 import { useState } from "react";
 import { Mode, SystemInfo } from "@/lib/api";
-import { IconArrowLeft, IconArrowRight, modeIcon } from "./icons";
+import { IconArrowLeft, IconArrowRight, ModeIcon } from "./icons";
 import { Button, ThemeToggle, ui } from "./ui";
 import s from "./rounds.module.css";
 
@@ -51,7 +51,6 @@ export function RoundPicker({
         <p className={ui.eyebrow}>Choose a round</p>
         <div className={s.grid}>
           {system?.modes.map((m) => {
-            const Glyph = modeIcon(m.key);
             const needsResume = m.key === RESUME_MODE;
             return (
               <button
@@ -63,7 +62,7 @@ export function RoundPicker({
               >
                 <span className={s.cardHead}>
                   <span className={s.glyph}>
-                    <Glyph size={20} />
+                    <ModeIcon mode={m.key} size={20} />
                   </span>
                   <span>
                     <span className={s.name}>{m.name}</span>

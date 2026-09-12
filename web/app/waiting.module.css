@@ -1,0 +1,155 @@
+/* The waiting states.
+ *
+ * Indeterminate only. The backend does its work behind one blocking
+ * request and reports nothing until it returns, so there is no honest
+ * percentage to draw - these say what is being done, not how far along.
+ */
+
+.waiting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.waitTitle {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+}
+
+.progressWrap {
+  position: relative;
+  height: 3px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progressBar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  background: var(--accent);
+  border-radius: var(--radius-full);
+  animation: slide 1.4s var(--ease) infinite;
+}
+
+@keyframes slide {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.waitSteps {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.waitSteps li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.waitSteps li::before {
+  content: "";
+  flex: none;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  animation: breathe 1.8s var(--ease) infinite;
+}
+
+.waitSteps li:nth-child(2)::before {
+  animation-delay: 0.3s;
+}
+
+.waitSteps li:nth-child(3)::before {
+  animation-delay: 0.6s;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.waitNote {
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+  color: var(--text-muted);
+  max-width: var(--measure);
+}
+
+.dotsRow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dots {
+  display: inline-flex;
+  gap: 0.1875rem;
+}
+
+.dots i {
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  animation: breathe 1.2s var(--ease) infinite;
+}
+
+.dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Sits where the next question will appear, so the eye is already in the
+   right place when it lands. */
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.thinking {
+  font-size: var(--text-base);
+  color: var(--text-subtle);
+}
+
+/* The global reduced-motion rule kills the animations; these keep the
+   states legible once they stop. */
+@media (prefers-reduced-motion: reduce) {
+  .progressBar {
+    width: 100%;
+    left: 0;
+    opacity: 0.5;
+  }
+
+  .waitSteps li::before,
+  .dots i {
+    opacity: 1;
+  }
+}

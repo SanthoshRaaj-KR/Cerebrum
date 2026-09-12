@@ -28,7 +28,7 @@
  * animations stop and the states stay legible as plain text.
  */
 
-import styles from "./page.module.css";
+import styles from "./waiting.module.css";
 
 /** An indeterminate bar. Honest about knowing only "still working". */
 export function ProgressBar({ label }: { label?: string }) {
@@ -62,9 +62,18 @@ export function Dots({ label }: { label: string }) {
  * with no claim about which step is current - because the backend does not
  * say. `note` carries the honest expectation of how long it takes.
  */
-export function StartingUp({ steps, note }: { steps: string[]; note: string }) {
+export function StartingUp({
+  title,
+  steps,
+  note,
+}: {
+  title: string;
+  steps: string[];
+  note: string;
+}) {
   return (
     <div className={styles.waiting} aria-live="polite">
+      <p className={styles.waitTitle}>{title}</p>
       <ProgressBar label="Setting up your interview" />
       <ul className={styles.waitSteps}>
         {steps.map((s) => (
@@ -92,9 +101,18 @@ export function ThinkingTurn() {
 }
 
 /** The end-of-interview wait, while the scorecard is written. */
-export function BuildingReport() {
+export function BuildingReport({
+  title,
+  count,
+}: {
+  title: string;
+  count: number;
+}) {
   return (
     <div className={styles.waiting} aria-live="polite">
+      <p className={styles.waitTitle}>
+        {title} · {count} question{count === 1 ? "" : "s"}
+      </p>
       <ProgressBar label="Writing your report" />
       <ul className={styles.waitSteps}>
         <li>Finishing the per-answer judgements still running</li>
