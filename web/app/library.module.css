@@ -1,0 +1,370 @@
+/* The library. See library.tsx for why the header is three answers rather
+   than a count. */
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.03em;
+  line-height: var(--leading-tight);
+  margin-block: var(--space-2);
+  text-wrap: balance;
+}
+
+.loading {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* -- progress header ------------------------------------------------------ */
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: var(--space-4);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.statValue {
+  font-family: var(--font-mono), monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+/* Direction of travel is the one number here that carries a judgement, so
+   it is the one that gets a colour - and it always has the sign and the
+   word beside it, never the colour alone. */
+.statUp {
+  color: var(--ok);
+}
+
+.statDown {
+  color: var(--warn);
+}
+
+.statLabel {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+}
+
+.chart {
+  padding: var(--space-5);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.chartHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+}
+
+.breakdown {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: var(--space-4);
+}
+
+.panel {
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.panelHint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+  margin-top: var(--space-2);
+  max-width: var(--measure);
+}
+
+.modeList,
+.gapList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-3);
+}
+
+.modeRow,
+.gapRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.modeRow:last-child,
+.gapRow:last-child {
+  border-bottom: none;
+}
+
+.modeName,
+.gapName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--text);
+}
+
+.modeMeta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex: none;
+}
+
+.modeAvg,
+.gapTimes {
+  font-family: var(--font-mono), monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+}
+
+.modeCount,
+.gapTimes {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.gapTimes {
+  color: var(--warn);
+  font-size: var(--text-sm);
+}
+
+/* -- the grid ------------------------------------------------------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  transition:
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+
+.card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--glow-accent);
+  transform: translateY(-3px);
+}
+
+/* A full-card click target underneath the content, so the whole card opens
+   the report - but the delete button sits above it and keeps its own.
+   Nesting a button inside a button is invalid HTML; layering two siblings
+   is not. */
+.cardOpen {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+
+.cardOpen:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.cardHead,
+.cardHeadline,
+.cardFoot {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Only the controls take the pointer back; everything else lets the click
+   fall through to the card. */
+.cardActions {
+  pointer-events: auto;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.cardGlyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border-radius: var(--radius-md);
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.cardTitles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.cardName {
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-base);
+  line-height: var(--leading-snug);
+}
+
+.cardDate {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+.cardScore {
+  font-family: var(--font-mono), monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  flex: none;
+}
+
+.cardHeadline {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-muted);
+  /* Two lines, then stop. The headline varies in length and a grid of
+     cards that disagree about their height reads as broken. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.8em;
+}
+
+.cardFoot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.cardQs {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+/* -- setup / empty -------------------------------------------------------- */
+
+.setup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-6);
+}
+
+.setupTitle {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+.setupBody {
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--text-muted);
+  max-width: var(--measure);
+}
+
+.setupBody code {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+.setupCode {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  overflow-x: auto;
+}
+
+@media (max-width: 40rem) {
+  .title {
+    font-size: var(--text-2xl);
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
