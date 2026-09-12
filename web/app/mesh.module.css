@@ -1,0 +1,124 @@
+/* The ambient field. See mesh.tsx for why it exists and why it is this
+   restrained. Everything here animates transform or opacity only - nothing
+   that can trigger layout or paint on a 60s loop. */
+
+.mesh {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: var(--mesh-opacity);
+  /* The ground under the blobs. Without this the fixed layer is
+     transparent and the blobs sit on whatever the body happens to be. */
+  background: var(--bg);
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  /* The blur is what turns three circles into a field. It is expensive to
+     recompute, so it is set once and never animated - only the transform
+     underneath it moves. */
+  filter: blur(70px);
+  will-change: transform;
+}
+
+.blobA {
+  width: 46vmax;
+  height: 46vmax;
+  top: -16vmax;
+  left: -10vmax;
+  background: radial-gradient(circle at 50% 50%, var(--mesh-1), transparent 70%);
+  animation: driftA 34s var(--ease) infinite alternate;
+}
+
+.blobB {
+  width: 38vmax;
+  height: 38vmax;
+  top: 8vmax;
+  right: -12vmax;
+  background: radial-gradient(circle at 50% 50%, var(--mesh-2), transparent 70%);
+  animation: driftB 41s var(--ease) infinite alternate;
+}
+
+.blobC {
+  width: 52vmax;
+  height: 52vmax;
+  bottom: -26vmax;
+  left: 22vmax;
+  background: radial-gradient(circle at 50% 50%, var(--mesh-3), transparent 72%);
+  animation: driftC 47s var(--ease) infinite alternate;
+}
+
+/* The hero variant: same field, more of it, and pulled to the top where
+   the masthead sits. */
+.meshHero .blobA {
+  width: 58vmax;
+  height: 58vmax;
+  top: -22vmax;
+}
+
+.meshHero .blobB {
+  width: 48vmax;
+  height: 48vmax;
+  top: -6vmax;
+}
+
+/* A faint noise layer. Large flat gradients band visibly on 8-bit
+   displays; a little grain breaks the bands up. Pure CSS - an SVG
+   turbulence filter would cost more than the problem is worth. */
+.grain {
+  position: absolute;
+  inset: -50%;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(127, 127, 127, 0.02) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(127, 127, 127, 0.02) 0 1px,
+      transparent 1px 3px
+    );
+  opacity: 0.6;
+}
+
+/* Distances are in percentages of the blob's own size, so the drift scales
+   with the viewport instead of being a fixed pixel wobble on a large
+   screen and a lurch on a small one. */
+@keyframes driftA {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(12%, 8%, 0) scale(1.12);
+  }
+}
+
+@keyframes driftB {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.08);
+  }
+  to {
+    transform: translate3d(-14%, 12%, 0) scale(1);
+  }
+}
+
+@keyframes driftC {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-10%, -10%, 0) scale(1.15);
+  }
+}
+
+/* The drift stops; the field stays. Depth is not motion, and removing the
+   colour as well would leave a flat page rather than a calm one. */
+@media (prefers-reduced-motion: reduce) {
+  .blob {
+    animation: none;
+  }
+}
