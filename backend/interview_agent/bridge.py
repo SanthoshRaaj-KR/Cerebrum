@@ -29,6 +29,7 @@ from interview_agent import interviewer as interviewer_mod
 from interview_agent import pipeline as pipeline_mod
 from interview_agent import profile as profile_mod
 from interview_agent import prompts
+from interview_agent import store as store_mod
 from interview_agent.config import settings
 from interview_agent.context import CandidateContext
 
@@ -37,9 +38,10 @@ logger = logging.getLogger("interview_agent.bridge")
 HOST = os.environ.get("INTERVIEW_AGENT_HOST", "127.0.0.1")
 PORT = int(os.environ.get("INTERVIEW_AGENT_PORT", "7332"))
 
-# The one active interview for this process. No database: sessions are
-# ephemeral and reset on restart. One at a time - this is a single-user
-# tool, not a service.
+# The one active interview for this process. Still ephemeral: it resets on
+# restart, and only an explicit press of Store puts a *finished* one in the
+# database (see store.py). One at a time - this is a single-user tool, not
+# a service.
 _session: interviewer_mod.InterviewSession | None = None
 
 # Tracks in-flight WebRTC peer connections by pc_id so a renegotiation
@@ -59,6 +61,10 @@ def system_info() -> dict[str, Any]:
         "maxQuestions": settings.max_questions,
         "researchEnabled": settings.research_enabled,
         "researchProviders": settings.research_providers,
+        # Whether the console should offer to save a finished interview.
+        # False is a normal state, not a broken one - it just means no
+        # MONGODB_URI in .env.
+        "storageEnabled": store_mod.available(),
         "modes": [
             {
                 "key": m.key,
@@ -130,6 +136,7 @@ async def lifespan(app: FastAPI):
     with contextlib.suppress(asyncio.CancelledError):
         await runner_task
     await _webrtc_handler.close()
+    await store_mod.close()
 
 
 app = FastAPI(title="Cerebrum bridge", lifespan=lifespan)
@@ -238,9 +245,14 @@ async def session_report() -> dict:
         raise HTTPException(400, "no active interview session")
 
     _session.finished = True
-    summary = await _session.running_score.finalize(_session)
+    # Written once. Re-running finalize() would re-issue the scorecard LLM
+    # call and hand back a different verdict on a second read - and then
+    # Store would save a report nobody had seen. The candidate's report and
+    # the saved copy have to be the same object.
+    if _session.scorecard is None:
+        _session.scorecard = await _session.running_score.finalize(_session)
     state = _session_state(_session)
-    state["scorecard"] = summary.to_dict()
+    state["scorecard"] = _session.scorecard.to_dict()
     return state
 
 
@@ -249,6 +261,80 @@ async def reset_session() -> dict:
     global _session
     _session = None
     await pipeline_mod.stop_current_session()
+    return {"ok": True}
+
+
+# -- saved interviews --------------------------------------------------------
+#
+# The one place anything outlives the process. Every route here returns 503
+# rather than 500 when no database is configured: nothing is broken, the
+# feature simply is not switched on.
+
+
+def _need_storage() -> None:
+    if not store_mod.available():
+        raise HTTPException(
+            503, "saving is off - add MONGODB_URI to .env to turn it on"
+        )
+
+
+@app.post("/api/interviews")
+async def save_interview() -> dict:
+    """Store the finished interview. Explicit: nothing is saved unless the
+    candidate presses the button, and nothing mid-interview is ever saved."""
+    _need_storage()
+    if _session is None:
+        raise HTTPException(400, "no active interview session")
+    if _session.scorecard is None:
+        raise HTTPException(400, "finish the interview before saving it")
+    try:
+        new_id = await store_mod.save(_session, _session.scorecard, system_info())
+    except store_mod.StorageError as exc:
+        raise HTTPException(502, str(exc)) from None
+    return {"id": new_id}
+
+
+@app.get("/api/interviews")
+async def list_interviews(limit: int = store_mod.DEFAULT_LIMIT,
+                          mode: str | None = None) -> dict:
+    _need_storage()
+    try:
+        return {"interviews": await store_mod.recent(limit, mode)}
+    except store_mod.StorageError as exc:
+        raise HTTPException(502, str(exc)) from None
+
+
+@app.get("/api/interviews/stats")
+async def interview_stats() -> dict:
+    """Declared before /api/interviews/{id} so "stats" is not read as an id."""
+    _need_storage()
+    try:
+        return await store_mod.stats()
+    except store_mod.StorageError as exc:
+        raise HTTPException(502, str(exc)) from None
+
+
+@app.get("/api/interviews/{interview_id}")
+async def read_interview(interview_id: str) -> dict:
+    _need_storage()
+    try:
+        doc = await store_mod.get(interview_id)
+    except store_mod.StorageError as exc:
+        raise HTTPException(502, str(exc)) from None
+    if doc is None:
+        raise HTTPException(404, "no saved interview with that id")
+    return doc
+
+
+@app.delete("/api/interviews/{interview_id}")
+async def remove_interview(interview_id: str) -> dict:
+    _need_storage()
+    try:
+        gone = await store_mod.delete(interview_id)
+    except store_mod.StorageError as exc:
+        raise HTTPException(502, str(exc)) from None
+    if not gone:
+        raise HTTPException(404, "no saved interview with that id")
     return {"ok": True}
 
 
