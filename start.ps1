@@ -5,6 +5,7 @@
         .\start.ps1 -Check     verify keys, then exit
         .\start.ps1 -NoWeb     bridge only (the console is already running)
         .\start.ps1 -Force     start even though the checks failed
+        .\start.ps1 -NoBrowser  do not open a tab (the launcher opens its own)
 
     First run creates the virtualenv and installs both dependency sets, so it
     takes a few minutes. After that it is a few seconds.
@@ -12,7 +13,7 @@
     Ctrl-C stops everything, including the Node processes npm spawns.
 #>
 
-param([switch]$Check, [switch]$NoWeb, [switch]$Force)
+param([switch]$Check, [switch]$NoWeb, [switch]$Force, [switch]$NoBrowser)
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
@@ -127,7 +128,9 @@ try {
             -WorkingDirectory $web -PassThru -NoNewWindow
 
         if (Wait-Port 3000 90) {
-            Start-Process 'http://localhost:3000'
+            # The desktop launcher watches the port itself and opens the tab
+            # when it is ready, so opening one here too would give you two.
+            if (-not $NoBrowser) { Start-Process 'http://localhost:3000' }
         } else {
             Say "The console is taking its time; open http://localhost:3000 yourself." Yellow
         }

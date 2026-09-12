@@ -6,6 +6,7 @@
 #     ./start.sh --check      verify keys, then exit
 #     ./start.sh --no-web     bridge only
 #     ./start.sh --force      start even though the checks failed
+#     ./start.sh --no-browser do not open a tab
 #
 # This hands off to start.ps1 rather than reimplementing it. Stopping two
 # services cleanly on Windows means killing process trees - npm spawns the
@@ -32,8 +33,9 @@ for arg in "$@"; do
     --check|-c)     args+=("-Check") ;;
     --no-web|-n)    args+=("-NoWeb") ;;
     --force|-f)     args+=("-Force") ;;
+    --no-browser)   args+=("-NoBrowser") ;;
     --help|-h)
-      sed -n '3,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '3,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
