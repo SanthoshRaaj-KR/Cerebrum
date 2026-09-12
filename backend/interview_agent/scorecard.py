@@ -66,6 +66,11 @@ class Scorecard:
     competencies: list[CompetencyResult] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
     grounded: bool = True
+    # The per-answer judgements the summary above was written from, in the
+    # order they were asked. The report shows these: the aggregate says how
+    # it went, this says where - and it is the only part that can tell
+    # someone what to have said instead on question four specifically.
+    answers: list["AnswerVerdict"] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +83,7 @@ class Scorecard:
             "competencies": [c.to_dict() for c in self.competencies],
             "sources": self.sources,
             "grounded": self.grounded,
+            "answers": [a.to_dict() for a in self.answers],
         }
 
 
@@ -315,9 +321,20 @@ class RunningScore:
         ordered = sorted(self.verdicts, key=lambda v: v.index)
         return "\n".join(v.render() for v in ordered)
 
+    def ordered(self) -> list[AnswerVerdict]:
+        """The verdicts in the order the questions were asked. They arrive
+        out of order - each is a background task that finishes whenever the
+        model gets round to it."""
+        return sorted(self.verdicts, key=lambda v: v.index)
+
     async def finalize(self, session) -> Scorecard:
         await self.await_pending()
-        return await _write_scorecard(session, self.render())
+        card = await _write_scorecard(session, self.render())
+        # Attach the working, not just the conclusion. Everything in the
+        # summary was derived from these, and the question-by-question part
+        # of the report is built straight off them.
+        card.answers = self.ordered()
+        return card
 
 
 # -- the final write-up -----------------------------------------------------
