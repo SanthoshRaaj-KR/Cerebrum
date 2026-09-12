@@ -1,17 +1,19 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* Base layer. Tokens live in tokens.css; this applies them to the document
+ * and sets the handful of element defaults every screen relies on. */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
 }
 
 html {
   height: 100%;
+  /* Swiss-minimal leans on whitespace and hierarchy, not decoration, so
+     the type has to be doing its job at every size. */
+  -webkit-text-size-adjust: 100%;
 }
 
 html,
@@ -22,28 +24,98 @@ body {
 
 body {
   min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
 a {
-  color: inherit;
+  color: var(--accent);
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+a:hover {
+  text-decoration: underline;
+}
+
+/* One focus treatment for the whole app. Never removed - per focus-states
+   and focus-appearance, a keyboard user needs to see where they are, and
+   the ring has to clear 3:1 against whatever it sits on. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Long tokens - URLs, competency names, pasted code - reflow rather than
+   forcing the page sideways. Deliberately overflow-wrap and not
+   word-break: break-all, which would chop ordinary prose mid-word. */
+p,
+li,
+dd,
+blockquote {
+  overflow-wrap: anywhere;
+}
+
+img,
+svg {
+  max-width: 100%;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Visible to screen readers, not on screen. Used for headings that carry
+   structure the layout already makes obvious. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Motion in this app only ever explains a change - a panel opening, work
+   in progress. None of it carries information, so under reduced-motion it
+   all goes rather than being approximated. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

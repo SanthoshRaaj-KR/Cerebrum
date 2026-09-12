@@ -1,0 +1,196 @@
+/* Design tokens for Cerebrum.
+ *
+ * Three layers, per design-system/cerebrum/MASTER.md: raw values, then
+ * semantic names, then whatever a component needs on top. Components
+ * reference the semantic layer only - no component file should contain a
+ * hex value, because that is how a palette stops being a palette.
+ *
+ * Both themes are defined here and designed together rather than one being
+ * an inversion of the other: dark uses lighter, desaturated tonal variants
+ * and its contrast is verified on its own surfaces.
+ *
+ * Light is the default. The report is the part of this product people
+ * actually read - per-question breakdowns, what a strong answer sounds
+ * like, coach notes - and that is long-form reading.
+ */
+
+/* -- layer 1: primitives ------------------------------------------------
+   Raw values, named for what they are. Nothing outside this file should
+   use these directly. */
+
+:root {
+  /* Slate, the neutral spine of the whole interface. */
+  --slate-950: #020617;
+  --slate-900: #0f172a;
+  --slate-800: #1e293b;
+  --slate-700: #334155;
+  --slate-600: #475569;
+  --slate-500: #64748b;
+  --slate-400: #94a3b8;
+  --slate-300: #cbd5e1;
+  --slate-200: #e2e8f0;
+  --slate-150: #e8ecf1;
+  --slate-100: #f1f5f9;
+  --slate-50: #f8fafc;
+  --white: #ffffff;
+
+  /* Blue carries every deliberate action. One accent, used sparingly - in
+     a tool that delivers a judgement, colour that means nothing is noise. */
+  --blue-700: #0369a1;
+  --blue-600: #0284c7;
+  --blue-400: #38bdf8;
+  --blue-300: #7dd3fc;
+
+  /* Status. Each verified at 4.5:1 or better on its own theme's surface. */
+  --green-700: #15803d;
+  --green-400: #4ade80;
+  --amber-700: #b45309;
+  --amber-400: #fbbf24;
+  --red-600: #dc2626;
+  --red-400: #f87171;
+
+  /* Spacing: a 4px rhythm, per the spacing-scale guideline. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* Type scale. 16px base - anything smaller on mobile triggers iOS
+     auto-zoom on focus and is below the readable floor anyway. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.4;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 999px;
+
+  /* Swiss-minimal: shadows are for genuine elevation, never decoration. */
+  --shadow-sm: 0 1px 2px rgba(2, 6, 23, 0.06);
+  --shadow-md: 0 2px 8px rgba(2, 6, 23, 0.08);
+  --shadow-lg: 0 8px 28px rgba(2, 6, 23, 0.12);
+
+  /* Motion. Density and motion dials were set low: this is an assessment
+     tool, so movement explains a change and never entertains. */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+
+  --measure: 68ch; /* 60-75 characters, per line-length. */
+}
+
+/* -- layer 2: semantic, light ------------------------------------------- */
+
+:root {
+  --bg: var(--slate-50);
+  --surface: var(--white);
+  --surface-sunken: var(--slate-100);
+  --border: var(--slate-200);
+  --border-strong: var(--slate-300);
+
+  --text: var(--slate-950);
+  --text-muted: var(--slate-600);
+  --text-subtle: var(--slate-500);
+  --text-inverse: var(--white);
+
+  --accent: var(--blue-700);
+  --accent-hover: var(--blue-600);
+  --accent-text: var(--white);
+  --accent-wash: rgba(3, 105, 161, 0.07);
+
+  --ok: var(--green-700);
+  --ok-wash: rgba(21, 128, 61, 0.09);
+  --warn: var(--amber-700);
+  --warn-wash: rgba(180, 83, 9, 0.1);
+  --bad: var(--red-600);
+  --bad-wash: rgba(220, 38, 38, 0.08);
+
+  --focus: var(--blue-700);
+
+  color-scheme: light;
+}
+
+/* -- layer 2: semantic, dark -------------------------------------------- */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: var(--slate-950);
+    --surface: var(--slate-900);
+    --surface-sunken: #0b1220;
+    --border: var(--slate-800);
+    --border-strong: var(--slate-700);
+
+    --text: var(--slate-50);
+    --text-muted: var(--slate-400);
+    --text-subtle: var(--slate-500);
+    --text-inverse: var(--slate-950);
+
+    --accent: var(--blue-400);
+    --accent-hover: var(--blue-300);
+    /* Dark accent is light, so its text must go dark to stay readable. */
+    --accent-text: var(--slate-950);
+    --accent-wash: rgba(56, 189, 248, 0.1);
+
+    --ok: var(--green-400);
+    --ok-wash: rgba(74, 222, 128, 0.12);
+    --warn: var(--amber-400);
+    --warn-wash: rgba(251, 191, 36, 0.12);
+    --bad: var(--red-400);
+    --bad-wash: rgba(248, 113, 113, 0.12);
+
+    --focus: var(--blue-400);
+
+    color-scheme: dark;
+  }
+}
+
+/* The explicit choice wins over the system preference, in both directions -
+   so a toggle can override a dark OS as well as a light one. */
+:root[data-theme="dark"] {
+  --bg: var(--slate-950);
+  --surface: var(--slate-900);
+  --surface-sunken: #0b1220;
+  --border: var(--slate-800);
+  --border-strong: var(--slate-700);
+
+  --text: var(--slate-50);
+  --text-muted: var(--slate-400);
+  --text-subtle: var(--slate-500);
+  --text-inverse: var(--slate-950);
+
+  --accent: var(--blue-400);
+  --accent-hover: var(--blue-300);
+  --accent-text: var(--slate-950);
+  --accent-wash: rgba(56, 189, 248, 0.1);
+
+  --ok: var(--green-400);
+  --ok-wash: rgba(74, 222, 128, 0.12);
+  --warn: var(--amber-400);
+  --warn-wash: rgba(251, 191, 36, 0.12);
+  --bad: var(--red-400);
+  --bad-wash: rgba(248, 113, 113, 0.12);
+
+  --focus: var(--blue-400);
+
+  color-scheme: dark;
+}
