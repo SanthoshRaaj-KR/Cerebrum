@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from interview_agent import (
     agent,
@@ -41,7 +42,7 @@ from interview_agent.evaluator import AnswerNote, CompetencyBar, Rubric
 from interview_agent.prompts import Mode
 from interview_agent.research import RoleBrief
 from interview_agent.resume import ResumeDigest
-from interview_agent.scorecard import RunningScore
+from interview_agent.scorecard import RunningScore, Scorecard
 
 @dataclass
 class Turn:
@@ -75,6 +76,15 @@ class InterviewSession:
     # interview runs; the scorecard is written from them at the end.
     running_score: RunningScore = field(default_factory=RunningScore)
     finished: bool = False
+    # When the interview began, in UTC. Nothing in the interview logic reads
+    # it - there is no clock and nothing is scored on time - it exists so a
+    # saved interview can say when it happened.
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    # The scorecard, once written. Kept because writing it is an LLM call:
+    # without this, a second POST to /api/session/report would produce a
+    # *different* report, and anything saved afterwards would not be the
+    # report the candidate actually read.
+    scorecard: Scorecard | None = None
     _final_turn_sent: bool = False
     # Per-session ceiling on questions; None means use settings.max_questions.
     # Only the quality-check harness sets it, to keep scripted runs short.
@@ -118,6 +128,10 @@ class InterviewSession:
         self.ledger = CoverageLedger()
         self.running_score = RunningScore()
         self.finished = False
+        self.started_at = datetime.now(timezone.utc)
+        # A restart is a new interview; carrying the previous scorecard over
+        # would let the old report be saved against the new transcript.
+        self.scorecard = None
         self._final_turn_sent = False
         self._max_questions = max_questions
         return await self._ask(opening=True)
