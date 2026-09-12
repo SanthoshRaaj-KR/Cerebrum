@@ -7,3 +7,6 @@ __pycache__/
 web/node_modules/
 web/.next/
 web/out/
+
+# Playwright MCP scratch output from UI verification runs.
+.playwright-mcp/
