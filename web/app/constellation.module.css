@@ -1,0 +1,56 @@
+/* The coverage constellation.
+
+   One colour only. Every node is either the accent (asked about) or the
+   muted border (not yet) - there is no second colour here, because a
+   second colour would inevitably come to mean "and it went well", which
+   is the one thing this screen is not allowed to say. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.svg {
+  display: block;
+  overflow: visible;
+}
+
+.edge {
+  stroke: var(--border);
+  stroke-width: 1;
+  transition: stroke var(--dur-slow) var(--ease);
+}
+
+.edgeOn {
+  stroke: var(--accent);
+  opacity: 0.45;
+}
+
+.node {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  transition:
+    fill var(--dur-slow) var(--ease),
+    stroke var(--dur-slow) var(--ease);
+}
+
+.nodeOn {
+  fill: var(--accent);
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 5px var(--accent-wash));
+}
+
+.core {
+  fill: var(--text-subtle);
+  opacity: 0.5;
+}
+
+.caption {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  letter-spacing: 0.04em;
+}
