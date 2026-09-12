@@ -6,7 +6,9 @@ BLURB = (
 DIMS = ("Ownership", "Depth", "Reflection")
 
 # This round runs off the candidate's own projects, so there is no role to
-# search for and nothing sensible to prefill - they type their own target.
+# search for: gateway.py builds the brief from the résumé instead, and the
+# empty string is what tells the bridge this is the one round that needs a
+# CV before it can start.
 DEFAULT_ROLE = ""
 
 PROMPT = """\

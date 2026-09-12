@@ -48,9 +48,9 @@ interviewer:
   remember_turns: 30
   # Modes selectable in the UI, in the order the cards appear. Each needs a
   # matching module in backend/interview_agent/prompts/ registered in that
-  # package's __init__. There is no separate role list any more - the mode
-  # decides the questions, and the candidate types their own target role and
-  # level on the résumé screen.
+  # package's __init__. There is no separate role list: the mode IS the
+  # role. Each prompt module carries its own DEFAULT_ROLE, which is what
+  # gets researched, so nothing is typed in on the way to an interview.
   modes:
     - resume_projects
     - sde_backend
