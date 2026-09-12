@@ -64,7 +64,7 @@ export function RoundPicker({
                   <span className={s.glyph}>
                     <ModeIcon mode={m.key} size={20} />
                   </span>
-                  <span>
+                  <span className={s.nameBlock}>
                     <span className={s.name}>{m.name}</span>
                     <span className={s.role}>
                       {needsResume ? "your own work" : m.defaultRole}
