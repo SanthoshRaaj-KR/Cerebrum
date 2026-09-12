@@ -46,7 +46,18 @@ const NO_FLASH = `try{var t=localStorage.getItem('cerebrum-theme');if(t==='dark'
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
+    // suppressHydrationWarning because NO_FLASH below deliberately stamps
+    // data-theme onto this element before React loads. The server cannot
+    // know the viewer's stored preference, so the attribute is always a
+    // mismatch by design - and the alternative, letting React set it after
+    // hydration, is the white flash the script exists to prevent. It
+    // suppresses the warning for this element's own attributes only, not
+    // for the tree beneath it.
+    <html
+      lang="en"
+      className={`${plexSans.variable} ${plexMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
       </head>
