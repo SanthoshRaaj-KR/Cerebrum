@@ -1,0 +1,239 @@
+/* The interview screen.
+ *
+ * One question at a time, centred, with everything else subordinate to it.
+ * The transcript is behind you and stays quiet; the composer is the only
+ * live thing on the page.
+ */
+
+.shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* -- top bar ------------------------------------------------------------- */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.barInner {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding-block: var(--space-3);
+  padding-inline: var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.barTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.barGlyph {
+  color: var(--accent);
+  display: inline-flex;
+}
+
+.barMeter {
+  flex: 1;
+  min-width: 0;
+}
+
+.barActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* -- the conversation ---------------------------------------------------- */
+
+.stream {
+  flex: 1;
+  width: 100%;
+  max-width: 52rem;
+  margin: 0 auto;
+  padding-block: var(--space-6) var(--space-8);
+  padding-inline: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Answered turns recede. They are context, not the thing being worked on,
+   and keeping them at full strength makes the live question compete with
+   its own history. */
+.turnPast .question {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+}
+
+.turnPast .answer {
+  color: var(--text-subtle);
+}
+
+.who {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+}
+
+.question {
+  font-size: var(--text-xl);
+  line-height: var(--leading-snug);
+  letter-spacing: -0.01em;
+  max-width: var(--measure);
+}
+
+.answer {
+  color: var(--text-muted);
+  line-height: var(--leading-relaxed);
+  white-space: pre-wrap;
+  max-width: var(--measure);
+  border-left: 2px solid var(--border);
+  padding-left: var(--space-4);
+}
+
+.skipped {
+  font-style: italic;
+  color: var(--text-subtle);
+}
+
+/* -- composer ------------------------------------------------------------ */
+
+.composer {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  padding-block: var(--space-4);
+  padding-inline: var(--space-5);
+}
+
+.composerInner {
+  max-width: 52rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.input {
+  width: 100%;
+  min-height: 7rem;
+  max-height: 40vh;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  resize: vertical;
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.bar2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.hintKeys {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+.micLive {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.interim {
+  font-size: var(--text-sm);
+  color: var(--text-subtle);
+  font-style: italic;
+  min-height: 1.25rem;
+}
+
+/* -- the plan, shown once before the first answer ------------------------ */
+
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.planTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.planLine {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-relaxed);
+}
+
+.planList {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.planList li {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.125rem var(--space-2);
+}
+
+@media (max-width: 40rem) {
+  .barInner,
+  .stream,
+  .composer {
+    padding-inline: var(--space-4);
+  }
+
+  .barTitle span:last-child {
+    display: none;
+  }
+
+  .question {
+    font-size: var(--text-lg);
+  }
+}

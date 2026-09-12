@@ -51,7 +51,15 @@ export type Turn = {
  * wrapping up. Nothing here is evaluative. */
 export type Pacing = {
   questionsAsked: number;
+  /** The hard ceiling. Rarely what the interview actually runs to. */
   maxQuestions: number;
+  /** What it is expected to run to - one question per competency plus room
+   * for follow-ups. An estimate, not a schedule: the interview really ends
+   * when every competency has a read. The progress bar fills against this
+   * and the copy is careful never to call it a deadline. */
+  plannedQuestions: number;
+  estimatedMinutes: number;
+  competencyCount: number;
   closing: boolean;
 };
 
