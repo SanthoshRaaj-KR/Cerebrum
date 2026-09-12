@@ -36,6 +36,10 @@ export type SystemInfo = {
   researchEnabled: boolean;
   /** Search providers in fallback order, e.g. ["tavily", "brave"]. */
   researchProviders: string[];
+  /** Whether a finished interview can be kept. False is a normal state -
+   * it just means no MONGODB_URI in .env - so the console explains it
+   * rather than hiding the feature or letting the button fail. */
+  storageEnabled: boolean;
   modes: Mode[];
 };
 
@@ -192,4 +196,88 @@ export async function resetSession(): Promise<{ ok: boolean }> {
   return asJson(
     await fetch(`${BRIDGE_URL}/api/session/reset`, { method: "POST" })
   );
+}
+
+/* -- saved interviews -------------------------------------------------------
+ *
+ * The one part of this product that outlives the bridge process. Saving is
+ * explicit and only ever happens on a finished interview - see store.py.
+ */
+
+/** What the library grid needs: a card's worth, not the transcript. */
+export type SavedSummary = {
+  id: string;
+  savedAt: string;
+  mode: { key: string; name: string };
+  role: string;
+  verdict: Scorecard["verdict"];
+  score: number;
+  headline: string;
+  questionCount: number;
+};
+
+/** A saved interview in full. Deliberately close to `Scorecard` plus the
+ * session context, so ReportScreen can render a live report and a saved
+ * one from the same props and the two cannot drift apart. */
+export type SavedInterview = SavedSummary & {
+  startedAt: string | null;
+  level: string;
+  strengths: string[];
+  gaps: string[];
+  notes: string[];
+  competencies: CompetencyResult[];
+  answers: AnswerVerdict[];
+  turns: Turn[];
+  sources: string[];
+  grounded: boolean;
+  researchSource: "research" | "resume" | null;
+  resume: string | null;
+  system: {
+    model: string | null;
+    scorerModel: string | null;
+    coordinator: string | null;
+    fresher: boolean | null;
+  };
+};
+
+export type ProgressStats = {
+  count: number;
+  average?: number;
+  best?: number;
+  /** Oldest first - a trend line that runs backwards is a trap. */
+  trend: { at: string; score: number; mode: string; id: string }[];
+  byMode: { key: string; name: string; count: number; average: number }[];
+  /** Competencies that came back as developing or not-shown, most
+   * frequent first. `not_covered` is excluded: never reaching an area is
+   * not the same as being weak at it. */
+  recurringGaps: { name: string; times: number }[];
+};
+
+/** Stores the interview currently in the bridge. Only valid once the
+ * report has been generated. */
+export async function saveInterview(): Promise<{ id: string }> {
+  return asJson(
+    await fetch(`${BRIDGE_URL}/api/interviews`, { method: "POST" })
+  );
+}
+
+export async function listInterviews(
+  mode?: string
+): Promise<{ interviews: SavedSummary[] }> {
+  const q = mode ? `?mode=${encodeURIComponent(mode)}` : "";
+  return asJson(await fetch(`${BRIDGE_URL}/api/interviews${q}`));
+}
+
+export async function getInterview(id: string): Promise<SavedInterview> {
+  return asJson(await fetch(`${BRIDGE_URL}/api/interviews/${id}`));
+}
+
+export async function deleteInterview(id: string): Promise<{ ok: boolean }> {
+  return asJson(
+    await fetch(`${BRIDGE_URL}/api/interviews/${id}`, { method: "DELETE" })
+  );
+}
+
+export async function getProgress(): Promise<ProgressStats> {
+  return asJson(await fetch(`${BRIDGE_URL}/api/interviews/stats`));
 }

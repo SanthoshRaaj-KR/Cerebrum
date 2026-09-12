@@ -99,6 +99,41 @@ export const IconSpark = (p: IconProps) => (
   </Svg>
 );
 
+/* Added for the saved-interview library and the report's controls. Same
+   box, same stroke, same language as the rest - a glyph that arrives from
+   somewhere else is visible immediately. */
+
+export const IconBookmark = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6 4h12v16l-6-4.5L6 20V4z" />
+  </Svg>
+);
+
+export const IconTrash = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 7h16M10 4h4M6 7l1 13h10l1-13M10 11v6M14 11v6" />
+  </Svg>
+);
+
+export const IconChevron = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6 9.5l6 6 6-6" />
+  </Svg>
+);
+
+export const IconTrend = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 19V5M4 19h16" />
+    <path d="M7.5 15l3.5-4 3 2.5L20 7" />
+  </Svg>
+);
+
+export const IconLibrary = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 5v14M9 5v14M14.5 5.8l4.6 1.2-3.3 12.6-4.6-1.2z" />
+  </Svg>
+);
+
 export const IconCheck = (p: IconProps) => (
   <Svg {...p}>
     <path d="M4 12.5l5 5L20 6.5" />
