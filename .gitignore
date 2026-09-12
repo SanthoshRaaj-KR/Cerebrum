@@ -10,3 +10,9 @@ web/out/
 
 # Playwright MCP scratch output from UI verification runs.
 .playwright-mcp/
+
+# The desktop launcher is built, not committed: dist/ holds a binary, and
+# tools/launcher/obj/BuildInfo.cs bakes in the path of the machine that
+# built it. Rebuild with tools/launcher/build.ps1.
+dist/
+tools/launcher/obj/
