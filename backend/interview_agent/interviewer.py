@@ -64,7 +64,7 @@ class Turn:
 @dataclass
 class InterviewSession:
     mode_key: str
-    candidate: CandidateContext
+    candidate: CandidateContext = field(default_factory=CandidateContext)
     mode: Mode = field(init=False)
     brief: RoleBrief | None = None
     resume_digest: ResumeDigest | None = None
@@ -81,6 +81,13 @@ class InterviewSession:
 
     def __post_init__(self) -> None:
         self.mode = prompts.get(self.mode_key)
+        # The round carries the role; nobody types it. Only fill in what the
+        # caller left blank, so the résumé round can still pass a role the
+        # candidate named for themselves.
+        if not self.candidate.role:
+            self.candidate.role = self.mode.default_role
+        if not self.candidate.level:
+            self.candidate.level = "Fresher" if settings.fresher else "Experienced"
 
     # -- setup --------------------------------------------------------------
 

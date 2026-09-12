@@ -11,6 +11,18 @@ from dataclasses import dataclass
 
 @dataclass
 class CandidateContext:
+    """The round decides the role, so neither is typed in any more.
+
+    `role` is the chosen mode's DEFAULT_ROLE and `level` follows
+    candidate.fresher in config.yaml. Asking someone to pick "SDE &
+    Backend" and then type "Backend Engineer" underneath it was asking the
+    same question twice, and let the two disagree.
+
+    `resume` is optional now. Only the résumé round needs one - it is the
+    material for that round - and every other round is grounded in what
+    the role's interviews actually ask, which needs no CV at all.
+    """
+
     role: str = ""
     level: str = ""
     resume: str = ""
