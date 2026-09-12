@@ -264,8 +264,7 @@ def check_storage() -> None:
     the same way an absent Brave key is. A URI that is there but does not
     answer is a real failure - it means Store will fail at exactly the
     moment someone has finished an interview and wants to keep it."""
-    print("
-Saved interviews (optional)")
+    print("\nSaved interviews (optional)")
     if not settings.mongo_uri:
         print(f"{WARN} MONGODB_URI not set - interviews won't be saved")
         return

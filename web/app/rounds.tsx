@@ -42,9 +42,14 @@ function Masthead({
   onLibrary,
 }: {
   subtitle: string;
-  /** Only passed when saving is switched on. Without a database the
-   * library has nothing to show and nothing to offer, and a link into a
-   * wall is worse than no link. */
+  /** Always offered, even with no database configured. The library is
+   * where "can I keep these?" gets answered - with the connection string
+   * to paste in when the answer is not yet - so it is a destination
+   * rather than a dead end, and hiding it would hide the feature from
+   * exactly the person looking for it.
+   *
+   * Omitted on the résumé step, which is a focused task with its own way
+   * out - and has no library handler to point at. */
   onLibrary?: () => void;
 }) {
   return (
@@ -161,7 +166,7 @@ export function RoundPicker({
       <AmbientMesh variant="hero" />
       <Masthead
         subtitle="A mock technical interview that researches the role, adapts to your answers, and reports back in detail."
-        onLibrary={system?.storageEnabled ? onLibrary : undefined}
+        onLibrary={onLibrary}
       />
       <Pitch />
       <RecentStrip recent={recent} onOpen={onLibrary} />
