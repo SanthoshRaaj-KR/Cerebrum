@@ -342,6 +342,11 @@ class InterviewSession:
             evaluator.strength_of(current.note.read),
             focus=current.note.focus,
             exhausted=current.note.topic_exhausted and same_focus,
+            # A `strong` read is what buys a harder question next time on
+            # this ground. Anything else leaves the level alone - the
+            # reactive ladder digs in at the level they are already at
+            # rather than easing off to one they have already cleared.
+            held_up=current.note.read == "strong",
         )
 
         # Fire-and-forget: the deep judgement of this answer runs while the
