@@ -35,6 +35,7 @@ from interview_agent import (
 )
 from interview_agent.config import settings
 from interview_agent.context import CandidateContext
+from interview_agent import coverage
 from interview_agent.coverage import CoverageLedger
 from interview_agent.evaluator import AnswerNote, CompetencyBar, Rubric
 from interview_agent.prompts import Mode
@@ -174,6 +175,25 @@ class InterviewSession:
         keep = max(4, settings.remember_turns * 2)
         return msgs[-keep:]
 
+    def _pitch_for(self, target: str) -> str:
+        """How hard to pitch the next question on this ground.
+
+        Keyed off whichever competency is actually in play: the coordinator's
+        explicit target if it named one, otherwise whatever the last answer
+        was about. Ground nobody has touched starts at basics, which is the
+        default anyway."""
+        if not target:
+            last = [t for t in self.turns if t.note is not None]
+            target = last[-1].note.focus if last and last[-1].note else ""
+        if not target:
+            return ""
+        level = self.ledger.level_of(target)
+        return (
+            f"PITCH FOR THIS QUESTION - they are at the "
+            f"{coverage.level_name(level)} level on {target}. "
+            f"{coverage.level_brief(level)}"
+        )
+
     def _question_context(self, stage: str) -> questionnaire.QuestionContext:
         """Everything the questionnaire agent needs for one question."""
         return questionnaire.QuestionContext(
@@ -185,6 +205,7 @@ class InterviewSession:
             history=self._history(),
             private_note=self._last_answer_note(),
             stage=stage,
+            pitch=self._pitch_for(""),
         )
 
     def _closing_now(self) -> bool:

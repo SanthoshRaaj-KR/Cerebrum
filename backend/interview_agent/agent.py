@@ -292,6 +292,9 @@ async def run_turn(session, current, closing: bool) -> TurnDecision:
                 ctx = session._question_context("closing" if closing else "next")
                 ctx.intent = intent
                 ctx.target = target
+                # The pitch follows whatever ground the agent actually
+                # picked, not whatever the last answer happened to be about.
+                ctx.pitch = session._pitch_for(target)
                 # Routed by mode: the résumé round uses the gateway agent.
                 question = await session.question_agent.next_question(ctx)
                 decision.question = question.text

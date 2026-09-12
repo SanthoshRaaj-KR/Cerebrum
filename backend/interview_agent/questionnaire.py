@@ -56,6 +56,11 @@ class QuestionContext:
     # deciding for itself from the reactive ladder below.
     target: str = ""
     intent: str = ""
+    # How hard to pitch this one, from the coverage ledger - basics until
+    # they have shown the basics, then applied, then edge cases. This is
+    # what turns a good answer into a harder question rather than another
+    # question at the same level.
+    pitch: str = ""
     # Mode-specific framing swapped in ahead of the shared ladder - see
     # gateway.py, which uses it to run a résumé round off the candidate's
     # own work instead of a researched role syllabus.
@@ -123,8 +128,25 @@ Read their last answer and pick ONE of these:
 Only option 5 means picking new ground. The other four are you doing your
 job, and they are more common than 5 in a real interview.
 
-Escalate as you go: later questions should be harder than earlier ones,
-and meaningfully harder once you're most of the way through the coverage.
+HOW HARD TO PITCH IT. The two directions are not the same move, and
+getting them the wrong way round is the difference between an interview
+that finds someone's ceiling and one that just tires them out:
+
+- They answered WELL. Reward it by going UP, on the same ground. Take the
+  thing they just demonstrated and ask the version one level above it -
+  the trade-off behind the choice, the case where their answer stops
+  working, the thing they would have had to know to get it wrong. Never
+  re-ask, in different words, something they have already shown you. A
+  candidate who is doing well should feel the questions getting harder.
+
+- They answered POORLY. Do NOT go up, and do not pile on. Your job is now
+  to find what they DO have: come at the same idea from a more concrete
+  angle, make it smaller, ask for an example instead of a definition, or
+  drop to the adjacent thing that would have to be true underneath it. You
+  are trying to get their best out of them, not to prove the gap exists -
+  you already know it does.
+
+{pitch_block}
 
 Voice and manner:
 - One or two sentences, phrased the way a human interviewer actually talks
@@ -188,6 +210,7 @@ def _system_prompt(ctx: QuestionContext) -> str:
         role_research=ctx.brief.render() if ctx.brief else "",
         coverage_block=ctx.coverage_note,
         framing=ctx.framing,
+        pitch_block=ctx.pitch,
     )
 
 
