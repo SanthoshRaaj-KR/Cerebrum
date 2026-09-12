@@ -47,8 +47,15 @@ class CandidateContext:
         if resume:
             lines.append("\nRésumé (their own words):\n" + resume)
         else:
+            # Not a gap to apologise for. Every round but the résumé one is
+            # grounded in what the role's interviews actually ask, and a
+            # fresher has nothing on a CV that would change what a fair
+            # question about indexing looks like.
             lines.append(
-                "\nNo résumé provided. Open by asking them to introduce "
-                "themselves and their background, and work from that."
+                "\nNo résumé for this round, and none is needed - it is a "
+                "subject round, not a walk through their history. Do not ask "
+                "them to talk you through their CV or their projects, and do "
+                "not open by asking them to introduce themselves. Ask about "
+                "the subject."
             )
         return "\n".join(lines)

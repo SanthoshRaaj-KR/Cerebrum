@@ -163,14 +163,18 @@ async def start_session(body: dict) -> dict:
 
     mode_key = str(body.get("mode", ""))
     candidate = CandidateContext(
+        # Both normally blank: the session fills role in from the mode and
+        # level from config. Still accepted so a caller can override.
         role=str(body.get("role", "")).strip(),
         level=str(body.get("level", "")).strip(),
         resume=str(body.get("resume", "")).strip(),
     )
-    # The interview is built around the candidate's actual résumé now - it's
-    # digested at start and every round leans on it. No résumé, no session.
-    if not candidate.resume:
-        raise HTTPException(400, "a résumé is required to start an interview")
+    # A résumé is required for exactly one round, because it IS that round's
+    # material. Every other round is a subject round grounded in what the
+    # role's interviews actually ask, and demanding a CV to sit one was
+    # asking for something never used.
+    if mode_key == gateway.MODE_KEY and not candidate.resume:
+        raise HTTPException(400, "this round is about your own work - add your résumé to start")
     # Question ceiling overridable per session - the web console never sends
     # this (it wants the configured max), but tools/quality_check.py does,
     # to keep scripted runs short.

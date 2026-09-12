@@ -99,13 +99,20 @@ class InterviewSession:
             self.brief = await gateway.build_brief(
                 self.candidate, self.resume_digest, self.mode
             )
-        else:
+        elif self.candidate.resume.strip():
             # Independent prep work, both non-raising - run them together so
             # a session start is one round-trip's wait, not two.
             self.brief, self.resume_digest = await asyncio.gather(
                 research.build_brief(self.candidate, self.mode),
                 resume.digest(self.candidate.resume),
             )
+        else:
+            # No résumé, which is the normal case for every round but the
+            # résumé one: these rounds are grounded in what the role's
+            # interviews actually ask, and need no CV to run. Skipping the
+            # digest also skips a model call nobody asked for.
+            self.brief = await research.build_brief(self.candidate, self.mode)
+            self.resume_digest = None
         self.turns = []
         self.ledger = CoverageLedger()
         self.running_score = RunningScore()
