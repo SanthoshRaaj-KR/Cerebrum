@@ -1,0 +1,279 @@
+/* Shared primitives. Semantic tokens only - no raw values here. */
+
+/* -- page shell ---------------------------------------------------------- */
+
+.page {
+  max-width: 64rem;
+  margin: 0 auto;
+  /* padding-block, never the shorthand, so the side gutter below is never
+     zeroed out by a later rule. */
+  padding-block: var(--space-7) var(--space-8);
+  padding-inline: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.pageWide {
+  max-width: 72rem;
+}
+
+@media (max-width: 40rem) {
+  .page {
+    padding-block: var(--space-5) var(--space-7);
+    padding-inline: var(--space-4);
+    gap: var(--space-6);
+  }
+}
+
+/* -- section headings ---------------------------------------------------- */
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+  margin-bottom: var(--space-3);
+}
+
+.sectionTitle {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+  margin-bottom: var(--space-2);
+}
+
+.lede {
+  color: var(--text-muted);
+  max-width: var(--measure);
+  line-height: var(--leading-relaxed);
+}
+
+/* -- surfaces ------------------------------------------------------------ */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.cardPad {
+  padding: var(--space-5);
+}
+
+/* -- buttons ------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  /* 44px floor: the touch-target minimum, and it stops the primary action
+     looking incidental on desktop too. */
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  transition:
+    background-color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.btnPrimary {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btnSecondary {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.btnSecondary:hover:not(:disabled) {
+  border-color: var(--text-subtle);
+}
+
+.btnGhost {
+  background: transparent;
+  color: var(--text-muted);
+  padding-inline: var(--space-3);
+}
+
+.btnGhost:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-sunken);
+}
+
+.btn:disabled {
+  /* Reduced emphasis plus the real disabled attribute, per disabled-states -
+     it must not merely look inert. */
+  opacity: 0.45;
+}
+
+.btnFull {
+  width: 100%;
+}
+
+/* -- badges -------------------------------------------------------------- */
+
+/* Status is a word first. Colour repeats what the label already says, so
+   the meaning survives being unable to tell the colours apart. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.125rem var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.badgeOk {
+  color: var(--ok);
+  background: var(--ok-wash);
+  border-color: var(--ok-wash);
+}
+
+.badgeWarn {
+  color: var(--warn);
+  background: var(--warn-wash);
+  border-color: var(--warn-wash);
+}
+
+.badgeBad {
+  color: var(--bad);
+  background: var(--bad-wash);
+  border-color: var(--bad-wash);
+}
+
+.badgeNeutral {
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-color: var(--border);
+}
+
+/* -- tags ---------------------------------------------------------------- */
+
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.tag {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.0625rem var(--space-2);
+}
+
+/* -- progress ------------------------------------------------------------ */
+
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.meterHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.meterCount {
+  font-family: var(--font-mono), monospace;
+  font-weight: var(--weight-semibold);
+  /* Tabular figures: the number changes every turn and must not shuffle
+     the label beside it. */
+  font-variant-numeric: tabular-nums;
+}
+
+.meterNote {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.meterTrack {
+  height: 0.375rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.meterFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-full);
+  transition: width var(--dur-slow) var(--ease);
+}
+
+/* Past the estimate. The bar is full and the colour stops implying there
+   is road left - the interview runs on coverage, not on this number. */
+.meterFillOver {
+  background: var(--warn);
+}
+
+/* -- notices ------------------------------------------------------------- */
+
+.notice {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.noticeBad {
+  border-color: var(--bad);
+  background: var(--bad-wash);
+  color: var(--text);
+}
+
+/* -- theme toggle -------------------------------------------------------- */
+
+.themeToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--surface);
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.themeToggle:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
