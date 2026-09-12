@@ -1,97 +1,133 @@
 # Cerebrum
 
-A mock interviewer for entry-level candidates that actually behaves like
-one. Pick a round - that is the whole of setup - and it runs a real
-interview of about half an hour: no fixed question list, no plan to fall
-back on. Before the first question it looks up what that role is being
-asked right now and distils it into the areas worth examining; from there
-it reacts to what you just said.
+**A mock technical interviewer that behaves like one.** Pick a round —
+that is the whole of setup — and it runs a real interview of about half an
+hour. No question list. No script to fall back to. Before it asks anything
+it goes and looks up what that role is actually being asked *right now*,
+turns that into the areas worth examining, and from there it reacts to
+what you just said.
 
-Answer well and it goes **up** on that same ground - the trade-off behind
+Answer well and it goes **up** on that same ground — the trade-off behind
 your choice, the case where your answer stops working. Answer badly and it
 comes at the idea from a more concrete angle to find what you *do* have,
-rather than piling on a gap it has already found. It ends when it has a
-read on everything worth asking about, not when a timer runs out.
+instead of piling on a gap it has already found. It ends when it has a read
+on everything worth asking about, not when a timer runs out.
 
-Nothing is scored to your face: no score, no rubric, no hint of a verdict
-mid-interview, because no real interviewer grades you as you go. It all
-arrives at the end, as a report that goes through every answer one at a
-time - what you said, what was missing, what a strong answer to that
-question sounds like, and one thing to do differently next time.
+Nothing is scored to your face. No score, no rubric, no hint of a verdict
+mid-interview — because no real interviewer grades you while you're still
+in the room. It all arrives at the end, as a report that goes through every
+answer one at a time: what you said, what it showed, what was missing, what
+a strong answer to that question sounds like, and one thing to do
+differently next time.
 
-```
-  pick a round               the round IS the role. Researched before
-      │                      question one - what that role is asked right now
-      │                      (Tavily → Brave), distilled into a competency map
-      ▼
-  the interview loop         one turn at a time, full history in context
-      │
-      ├── evaluator          how did that answer go, privately - and is a
-      │                      "wrong" call worth double-checking before it counts
-      ├── the move            challenge / redirect / dig / ease off / advance
-      ├── questionnaire      writes the one question the candidate sees
-      └── coverage ledger    which competencies still have nothing shown, and
-      │                      how hard each has been pushed - a `strong` answer
-      │                      buys a harder question on that ground next time.
-      │                      When nothing is left open, the interview wraps up
-      ▼
-  the report                 built from per-answer judgements made in the
-                              background as you went - a verdict, then every
-                              question taken apart, calibrated to "would a
-                              company hire this fresher", not a senior bar
-```
+---
 
-Six rounds - Résumé & Projects, SDE & Backend, Computer Fundamentals,
-System Design HLD/LLD, AI Engineer - all calibrated for a fresher by
-default (`candidate.fresher` in `config.yaml`).
+## Why this isn't another question generator
+
+Most "AI interview" tools generate ten questions, read them out in order,
+and score you on keywords. Five decisions make this one different, and each
+of them is enforced in code rather than asked for in a prompt.
 
 **The round is the role.** Picking "SDE & Backend" already says Backend
-Engineer, so nothing is typed in: each round carries its own
-`DEFAULT_ROLE`, and that is what gets researched. Five of the six start on
-one click. Only Résumé & Projects asks for anything else, and only because
-a résumé is that round's entire syllabus - every other round is a subject
-round that never needed one.
+Engineer. Each round module carries its own `DEFAULT_ROLE`, and that is
+what gets researched — so five of the six rounds start on a single click
+with nothing typed in. Only Résumé & Projects asks for anything else, and
+only because a résumé is that round's entire syllabus.
 
-## What it costs
+**The questions are current, not remembered.** `research.py` searches what
+that role is being asked this year, distils it into a competency map with a
+`fresher_bar` for each — what counts as *having* it at entry level, not at
+a senior level — and keeps real questions found in the wild purely for
+calibration. Those real questions are never rendered to the browser and
+never read out; shipping them mid-interview would hand you the answer key.
 
-**Nothing to run beyond the providers' usage.**
+**Difficulty moves with you, in both directions.** Every competency carries
+a rung: `basics → applied → edge cases and trade-offs`. An answer that
+genuinely holds up climbs it — the next question on that ground is harder
+and often quotes your own words back at you. The rung never falls, so a bad
+answer at `applied` gets you a different angle at the same level rather
+than a demotion. That distinction is the whole difference between an
+interviewer probing for your ceiling and one grinding on your floor.
 
-| Piece | What | Cost |
-|---|---|---|
-| The interviewer | OpenAI (default) | Your existing credits - [platform.openai.com](https://platform.openai.com/api-keys) |
-| The interviewer (faster alternative) | Cerebras | Set `interviewer.provider: cerebras` - [cloud.cerebras.ai](https://cloud.cerebras.ai) |
-| Role research (real fresher questions + competencies) | Tavily | Free tier available - [tavily.com](https://tavily.com) |
-| Speech-to-text, so you can speak an answer instead of typing it | Deepgram | Free tier available - [console.deepgram.com](https://console.deepgram.com) |
+**It ends when it's satisfied, not when the clock says.** There is no
+timer. The interview runs until every competency has a read — shown at
+thin-or-better, or pushed until the edge of what you know was found — with
+a question budget as the only floor and ceiling. Nothing is ever scored on
+how long an answer took.
 
-**Three keys, not five.** The interview is typed - the interviewer never
-speaks, so there is no text-to-speech to pay for - and the LLM needs only
-whichever provider you select. All swaps are one line in `config.yaml`;
-set `research.enabled: false` there to skip Tavily entirely and fall back
-to the model's own knowledge of the role.
+**The judging is real, and it happens off the critical path.** As each
+answer comes in, a stronger model judges it properly in the background
+while you're already reading the next question. A verdict of `wrong` — the
+one thing ever put to your face — gets a second focused opinion before it
+counts, because telling a candidate they're wrong when they're right is the
+worst thing this system can do.
 
-## Setup
+---
 
-### Docker (recommended)
+## The shape of an interview
 
-```bash
-cp .env.example .env     # then fill in your keys
-docker compose up
+```
+  pick a round                  the round IS the role. Researched before
+      │                         question one - what that role is asked right
+      │                         now (Tavily → Brave), distilled into a
+      ▼                         competency map with a fresher bar on each
+  the interview loop            one turn at a time, full history in context
+      │
+      ├── evaluator             how did that answer go, privately - and is a
+      │                         `wrong` call worth a second opinion first
+      ├── the move              challenge / redirect / dig / ease_off / advance
+      ├── questionnaire         writes the one question you actually see
+      └── coverage ledger       which competencies still have nothing shown,
+      │                         and how hard each has been pushed. A strong
+      │                         answer buys a harder question on that ground
+      │                         next time. When nothing is left open, it wraps
+      ▼
+  the report                    built from per-answer judgements made in the
+                                background as you went - a verdict, then every
+                                question taken apart, calibrated to "would a
+                                company hire this fresher", not a senior bar
 ```
 
-That's it — console on **http://localhost:3000**, backend on
-**http://localhost:7332**. `Ctrl-C` stops both; `docker compose down`
-removes the containers.
+### The six rounds
 
-`config.yaml` and the source are bind-mounted, so changing a mode, the
-interview length or any backend code is a `docker compose restart`, not a
-rebuild. Only a dependency change needs `docker compose build`.
+| Round | Researched as | What it's for |
+|---|---|---|
+| **Résumé & Projects** | *your own work* | Your own work, pulled apart one level deeper than you expect. The near-universal opening round |
+| **SDE & Backend** | Backend Engineer | APIs, databases, caching and the code you have actually shipped |
+| **Computer Fundamentals** | Software Engineer | OS, networks and DBMS — the core-subjects round almost every early-career process runs |
+| **System Design — HLD** | Software Engineer | Scoping, data modelling and trade-off reasoning at whiteboard pace |
+| **System Design — LLD** | Software Engineer | Class design, SOLID and object modelling — the machine-coding round |
+| **AI Engineer — LLM & GenAI** | AI Engineer | RAG, agents, evaluation and shipping with LLMs. Probes whether you built something real or followed a tutorial |
 
-One limitation: **the microphone doesn't work in Docker.** The typed
-interview is fully functional, but WebRTC media is UDP on ephemeral ports
-and aiortc advertises the container's own `172.x` addresses, which your
-browser can't route to. Run on the host if you want to dictate answers.
+All six are calibrated for a fresher by default (`candidate.fresher` in
+`config.yaml`).
 
-### On the host
+---
+
+## Start it
+
+### The desktop launcher
+
+```powershell
+.\tools\launcher\build.ps1
+```
+
+Builds `dist\Cerebrum.exe` and puts a **Cerebrum** shortcut on your
+desktop. Double-click it: it brings up both services, shows you where it
+has got to, and opens the tab when they're genuinely ready — not when a log
+line claims they are, but when the ports actually accept a connection.
+
+Closing its window is the important half. It takes the whole process tree
+down, then checks the ports and clears anything still holding 7332 or 3000,
+because a stale `node` process is the difference between "click it again"
+and "why is it broken".
+
+It builds with the C# compiler that already ships inside Windows
+(`%WINDIR%\Microsoft.NET\...\csc.exe`), so there is no SDK to install and
+no toolchain to keep current. It is a window around `start.ps1`, not a
+second copy of it — one place knows how to start this thing.
+
+### The command line
 
 ```bash
 ./start.sh          # Git Bash, MSYS, WSL
@@ -101,18 +137,19 @@ browser can't route to. Run on the host if you want to dictate answers.
 ```
 
 On a clean checkout this builds the virtualenv, installs the Python and
-Node dependencies, writes a `.env` for you to fill in, checks all three
-keys, then brings up the bridge and the console and opens the browser.
-Ctrl-C stops both.
+Node dependencies, writes a `.env` for you to fill in, checks every key,
+then brings up the bridge and the console and opens the browser. Ctrl-C
+stops both.
 
 | | Git Bash | PowerShell |
 |---|---|---|
 | Verify keys, then exit | `./start.sh --check` | `.\start.ps1 -Check` |
 | Bridge only | `./start.sh --no-web` | `.\start.ps1 -NoWeb` |
+| Don't open a tab | `./start.sh --no-browser` | `.\start.ps1 -NoBrowser` |
 | Start even though the checks failed | `./start.sh --force` | `.\start.ps1 -Force` |
 
 If the checks fail it does not start. A failed check means the interviewer
-can't actually hold a session - starting anyway only moves the discovery
+can't actually hold a session — starting anyway only moves the discovery
 from a preflight message to a dead mic mid-interview.
 
 `start.sh` is a thin wrapper around `start.ps1`. If PowerShell refuses to
@@ -124,190 +161,226 @@ is the default execution policy; `./start.sh` already passes
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
-Three keys go in `.env` - see `.env.example`:
+### Docker
 
-- **The LLM key** for whichever `interviewer.provider` you selected:
-  `OPENAI_API_KEY` (the default) or `CEREBRAS_API_KEY`. Either way,
-  `doctor.py` checks it with a real 1-token completion, not just a
-  valid-key check - listing models succeeds on an account with no credit
-  left, but running an interview doesn't.
-- **Deepgram** - [console.deepgram.com](https://console.deepgram.com) →
-  create an API key. Used for both hearing your answers and speaking the
-  questions.
-- **Tavily** - [tavily.com](https://tavily.com) → create an API key. Used
-  to research the candidate's target role before the interview starts.
-  Required unless `research.enabled` is set to `false` in `config.yaml`,
-  in which case the interview still runs, just grounded in the model's own
-  knowledge of the role instead of a live search.
-
-The remaining key is optional: the LLM provider you *didn't* pick.
-Leaving it blank is fine - startup only demands the ones your config
-actually uses, and names the missing one if you switch providers without
-adding its key.
-
-Check all of them before relying on them:
-
-```powershell
-.\start.ps1 -Check
+```bash
+cp .env.example .env     # then fill in your keys
+docker compose up
 ```
 
-## The console
+Console on **http://localhost:3000**, backend on **http://localhost:7332**.
+`config.yaml` and the source are bind-mounted, so changing a mode, the
+interview length or any backend code is a `docker compose restart`, not a
+rebuild.
 
-`.\start.ps1` puts it on **http://localhost:3000**. Two processes: the
-bridge (`interview_agent.bridge`, on 127.0.0.1:7332) holds the resume
-profile, the interview session state, and the mic's dictation pipeline;
-the web console walks through rounds → interview → report, talking to the
-bridge over REST and to the mic over WebRTC. `page.tsx` owns the state
-machine; each screen is its own file (`rounds`, `interview`, `report`),
-built on shared primitives in `ui.tsx` and the tokens in `tokens.css`.
+One limitation: **the microphone doesn't work in Docker.** The typed
+interview is fully functional, but WebRTC media is UDP on ephemeral ports
+and aiortc advertises the container's own `172.x` addresses, which your
+browser can't route to. Run on the host if you want to dictate answers.
 
-- **Rounds** - six cards, and for five of them that is the entire setup:
-  one click and the interview starts. The round carries its own role, and
-  the level comes from `candidate.fresher`, so there is nothing to type.
-  Résumé & Projects gets a second screen, because a résumé is that round's
-  whole syllabus - drop a PDF, choose one, or paste the text.
-- **Interview** - one question at a time, with answered turns receding
-  behind it. A progress bar against the expected length (not the hard
-  ceiling), and once, before the first answer, the plan: how many
-  questions, roughly how long, which areas. Type an answer or dictate it.
-  Nothing evaluative appears here at any point.
-- **Report** - the only evaluative screen. Verdict and score, what held up
-  and what didn't, then **every question taken apart**: what you said,
-  what it showed, what went wrong or was still missing, what a strong
-  answer to that question sounds like, and one thing to do next time.
-  Then the per-area table, coach notes, how it was judged, and sources.
+---
 
-Both themes are supported, light by default, remembered per browser and
-applied before first paint. Everything reads down to 375px.
+## What it costs
 
-Nothing here is authenticated - the bridge binds to `127.0.0.1` only, same
-posture as a single-user local tool with nothing to expose beyond this
-machine.
+**Nothing to run beyond the providers' usage.**
 
-## How the interview logic works
+| Piece | What | Cost |
+|---|---|---|
+| The interviewer | OpenAI (default) | Your existing credits — [platform.openai.com](https://platform.openai.com/api-keys) |
+| The interviewer (faster alternative) | Cerebras | Set `interviewer.provider: cerebras` — [cloud.cerebras.ai](https://cloud.cerebras.ai) |
+| Role research | Tavily | Free tier — [tavily.com](https://tavily.com) |
+| Speech-to-text, so you can speak an answer | Deepgram | Free tier — [console.deepgram.com](https://console.deepgram.com) |
 
-There's no question plan. Before the first question, `research.py`
-searches the round's role (Tavily, falling back
-to Brave - see `search.py`) and distills a `RoleBrief`: a competency map,
-each with a `fresher_bar` (what counts as *having* it at entry level, not
-at a senior level), plus real questions found for calibration, framed
-explicitly as "don't read these out, don't work through them in order."
+**Three keys, not five.** The interview is typed — the interviewer never
+speaks, so there is no text-to-speech to pay for — and the LLM needs only
+whichever provider you select. Every swap is one line in `config.yaml`; set
+`research.enabled: false` to skip Tavily entirely and fall back to the
+model's own knowledge of the role.
+
+Keys go in `.env` — see `.env.example`:
+
+- **The LLM key** for whichever `interviewer.provider` you selected:
+  `OPENAI_API_KEY` (the default) or `CEREBRAS_API_KEY`. `doctor.py` checks
+  it with a real 1-token completion, not a format check — listing models
+  succeeds on an account with no credit left, running an interview doesn't.
+- **`DEEPGRAM_API_KEY`** — dictation, so you can speak an answer instead of
+  typing it.
+- **`TAVILY_API_KEY`** — the role research. Required unless
+  `research.enabled` is `false`.
+
+The provider you *didn't* pick can stay blank. Startup demands only the
+keys your config actually uses, and names the missing one if you switch
+providers without adding its key.
+
+```powershell
+.\start.ps1 -Check      # check all of them before relying on them
+```
+
+---
+
+## How the interview logic actually works
+
+### Before question one
+
+`research.py` searches the round's role (Tavily, falling back to Brave —
+see `search.py`) and distils a `RoleBrief`: a competency map, each with a
+`fresher_bar`, plus real questions found in the wild for calibration,
+framed explicitly as *don't read these out, don't work through them in
+order*. One of the four queries is dated, and the distillation is told
+today's date and told to prefer what is recurring now — which is what keeps
+this from being a snapshot of whatever the model remembers.
+
 Alongside it, `resume.py` turns the résumé into a structured digest once,
-so no turn has to re-parse noisy PDF text. For the `resume_projects` mode
-there is no external syllabus to search, so `gateway.py` replaces
-`research.py` entirely and builds the brief *from the résumé* - the
-competencies are the candidate's own projects and the red flags are
-claims in their own document.
+so no turn has to re-parse noisy PDF text.
 
-Three agents run the interview, and which of them is in charge is a config
-switch (`interviewer.coordinator`):
+For `resume_projects` there is no external syllabus to search, so
+`gateway.py` replaces `research.py` entirely and builds the brief *from the
+résumé*: the competencies are the candidate's own projects, and the red
+flags are claims in their own document.
+
+### The three agents
+
+Which of them is in charge is a config switch (`interviewer.coordinator`).
 
 - **questionnaire** (`questionnaire.py`, or `gateway.py` for the résumé
   round) writes one question, and is the only thing allowed to produce
-  words the candidate sees. It works from the mode's focus
-  (`prompts/sde_backend.py` etc.), the role brief, the résumé digest, and
-  `coverage.py`'s ledger - which competencies still have nothing shown, so
-  "advance" means picking real gaps rather than the next line of a script.
+  words the candidate sees. It works from the mode's focus, the role brief,
+  the résumé digest, and the coverage ledger — so "advance" means picking a
+  real gap rather than the next line of a script.
 - **evaluator** (`evaluator.py`) reads each answer privately:
-  strong/thin/wrong/dodged/dont_know, which competency it bears on, and
-  the gap between what they said and what a correct answer contains. A
-  `wrong` verdict - the one thing that gets challenged to their face -
-  gets a second focused opinion on a stronger model before it counts,
-  because telling a candidate they're wrong when they're right is the
-  worst thing this can do.
+  strong / thin / wrong / dodged / dont_know, which competency it bears on,
+  and the gap between what was said and what a correct answer contains.
 - **main agent** (`agent.py`) calls those two as tools and decides the move
-  in between. It never writes to the candidate, can't skip judging an
-  answer, can't loop, and doesn't own the question cap, the ledger, or the
-  scorer - those are enforced in code whichever coordinator is driving.
-  Off by default; `coordinator: code` runs the deterministic ladder
-  instead.
+  in between — `challenge`, `redirect`, `dig`, `ease_off`, `advance`. It
+  never writes to the candidate, can't skip judging an answer, can't loop,
+  and doesn't own the question cap, the ledger, or the scorer. Off by
+  default; `coordinator: code` runs the deterministic ladder instead.
 
-There is no clock. The interview runs until every competency has a read -
-shown at thin-or-better, or pushed until the edge of what they know was
-found - bounded by a min/max question budget sized for about thirty
-minutes. Nothing is ever scored on how long an answer took.
+### The ledger is the end condition
+
+`coverage.py` holds, per competency, whether anything has been shown and
+how hard it has been pushed (`BASICS`, `APPLIED`, `EDGE`). A `strong` read
+climbs the rung; nothing lowers it. When no competency is left open the
+interview wraps up — bounded below by `min_questions` and above by
+`max_questions`, sized for about thirty minutes.
+
+### The report
 
 Nothing evaluative reaches the candidate until the end. As each answer
-comes in, a background task judges it properly (`scorecard.RunningScore`)
-while they're already reading the next question; at the end that
-accumulated per-answer analysis plus the transcript becomes the scorecard,
-calibrated explicitly to "would a company hire this fresher" rather than a
-senior bar - naming a concept plus one worked example plus reasoning about
-a trade-off out loud is a solid 7-8, and an honest "I don't know" costs
-far less than a confidently wrong claim.
+lands, a background task judges it properly (`scorecard.RunningScore`)
+while they're reading the next question; at the end that accumulated
+per-answer analysis plus the transcript becomes the scorecard — calibrated
+explicitly to *would a company hire this fresher*, not a senior bar. Naming
+a concept, plus one worked example, plus reasoning about a trade-off out
+loud is a solid 7–8, and an honest "I don't know" costs far less than a
+confidently wrong claim.
 
-The console shows all of this rather than hiding it: the setup screen
-renders the actual pipeline - which module runs at each stage, on which
-model, with which coordinator driving - and the interview sidebar keeps a
-compact version of it on screen throughout. Every value on those panels is
-read from `/api/health` and the live session state, so the diagram cannot
-drift from the configuration the way a hand-drawn one would. It shows the
-machinery and none of the judgements: which agents run is fine to see
-mid-interview, how any given answer was read is not.
+---
 
-The same composition is used whether the interview is running over the
-text-and-dictation console (`interviewer.InterviewSession`, a plain
-message list) or an internal call from `tools/quality_check.py` - the
-transport differs, the interview logic doesn't.
+## The console
 
-Nothing persists across restarts: no database, no session log. The resume
-profile, the active interview session, and the research cache under
-`.cache/` all live independently - the first two reset the moment the
-bridge process stops, the research cache survives it (14-day TTL, keyed
-per role/level/mode) so a second session on the same role doesn't pay for
-the search again.
+Two processes. The bridge (`interview_agent.bridge`, on 127.0.0.1:7332)
+holds the résumé profile, the session state and the mic's dictation
+pipeline; the web console walks rounds → interview → report, talking to the
+bridge over REST and to the mic over WebRTC. `page.tsx` owns the state
+machine; each screen is its own file, built on shared primitives in
+`ui.tsx` and the tokens in `tokens.css`.
 
-## Status
+- **Rounds** — six cards, and for five of them that is the entire setup:
+  one click and the interview starts. Résumé & Projects gets a second
+  screen — drop a PDF, choose one, or paste the text.
+- **Interview** — one question at a time, with answered turns receding
+  behind it. A progress bar against the *expected* length rather than the
+  hard ceiling, and once, before the first answer, the plan: how many
+  questions, roughly how long, which areas. Type an answer or dictate it.
+  Nothing evaluative appears here at any point.
+- **Report** — the only evaluative screen. Verdict and score, what held up
+  and what didn't, then **every question taken apart**: what you said, what
+  it showed, what went wrong or was still missing, what a strong answer
+  sounds like, and one thing for next time. Then the per-area table, coach
+  notes, how it was judged, and the sources it researched.
 
-The full loop - research → conversation → end-of-interview scorecard - has
-been run end to end against a live bridge: the interviewer challenges
-wrong claims by name, digs into thin answers, moves to new ground once
-satisfied rather than working down a list, and wraps itself up rather than
-running on. Two real bugs turned up in that pass and were fixed - a topic
-could get re-asked indefinitely if the candidate kept dodging it
-(`topic_exhausted` now has a deterministic guarantee, not just a model
-judgment call), and a confidently wrong claim could get half-credited as a
-strength in the scorecard (`scorecard.py`'s prompt now has an explicit
-worked example for exactly that case). Typed interview and dictation are
-verified working; a fully spoken interview (the interviewer talking back
-through TTS) isn't built - `pipeline.py`'s mic path only turns speech into
-the answer box's text.
+The console shows the machinery rather than hiding it: the setup screen
+renders the actual pipeline — which module runs at each stage, on which
+model, with which coordinator driving — and the interview keeps a compact
+version on screen throughout. Every value there is read from `/api/health`
+and the live session, so the diagram cannot drift from the configuration
+the way a hand-drawn one would. It shows the machinery and none of the
+judgements: which agents run is fine to see mid-interview, how any given
+answer was read is not.
 
-The multi-agent split (`agent.py`, `questionnaire.py`, `gateway.py`,
-`evaluator.py`) is built, and both coordinators now hold their structural
-invariants under `tools/coordinator_check.py` - which drives a whole
-interview through each of them with every model call stubbed, and asserts
-the things that are meant to be true by construction: the question cap is
-honoured, a wrap-up turn actually reaches the candidate, the questionnaire
-is steered by the read on the answer it is reacting to, and no question is
-written and then thrown away. It needs no API keys and no running bridge.
+Both themes, light by default, remembered per browser and applied before
+first paint. Everything reads down to 375px. Nothing is authenticated — the
+bridge binds to `127.0.0.1` only, the same posture as any single-user local
+tool.
 
-`coordinator: agent` has been run live against a real bridge and a real
-résumé: the gateway builds its brief from the candidate's own projects,
-the main agent logs its move each turn (`main agent: dig @ <competency>`),
-and the scorecard comes back written off the background per-answer
-judgements. What has *not* been done is the quality comparison - flipping
-`interviewer.coordinator` and diffing two `tools/quality_check.py hostile`
-transcripts to see whether the LLM main agent actually interviews better
-than the deterministic ladder, or just costs three more round-trips a
-question. `code` remains the default until that says otherwise.
+Nothing persists across restarts: no database, no session log. The résumé
+profile and the session die with the bridge process; the research cache
+under `.cache/` survives it (14-day TTL, keyed per role/level/mode) so a
+second session on the same role doesn't pay for the search again.
 
-One thing that comparison should look at specifically: in the live run
-above, a confidently wrong claim ("SQLite handles concurrent writes better
-than Postgres") was read as thin rather than wrong on the critical path,
-so the agent dug rather than challenging it to the candidate's face. The
-background scorer on the stronger model caught it and it landed in the
-scorecard's gaps and coach notes - but catching it a turn earlier, in the
-room, is the whole point of the `challenge` rung.
+---
 
-What hasn't been exercised with a *real* Tavily key is whether the
-research it returns is actually good - the code path (search → digest →
-distillation call → cached `RoleBrief`) is verified working with an
-unfunded/placeholder key and with research disabled, but the quality of
-real search results for a given role is worth checking once a working key
-is in `.env`.
+## Repo map
 
-Cerebras is wired up and worth switching to when its account has credit -
-it's substantially faster, which matters when a person is waiting on the
-next question. Right now that account returns `402 Payment required` on
-completions, which is why OpenAI is the default.
+| Path | What lives there |
+|---|---|
+| `backend/interview_agent/` | The interviewer: agents, coverage, research, scorecard, bridge |
+| `backend/interview_agent/prompts/` | One module per round — name, blurb, default role, focus |
+| `web/app/` | The console: state machine, three screens, tokens, primitives |
+| `tools/coordinator_check.py` | Drives a whole interview through both coordinators with every model call stubbed. No keys needed |
+| `tools/quality_check.py` | Scripted end-to-end runs against a real model |
+| `tools/launcher/` | The desktop launcher and its build script |
+| `design-system/cerebrum/` | The design system the console is built to |
+| `config.yaml` | Everything tunable by ear. Secrets live in `.env` |
+
+---
+
+## Status — what's verified, and what isn't
+
+The full loop — research → conversation → end-of-interview scorecard — has
+been run end to end against a live bridge. The interviewer challenges wrong
+claims by name, digs into thin answers, moves to new ground once satisfied
+rather than working down a list, and wraps itself up rather than running
+on. Typed interview and dictation are both verified working.
+
+**The adaptive ladder has been watched doing both directions.** A good
+answer on processes vs threads that mentioned the GIL was followed by a
+harder question quoting that back — *"you mentioned the GIL affects
+CPU-bound work; elaborate on how it impacts multi-threaded applications and
+what you'd do about it."* An honest "I don't know" on the follow-up moved
+it sideways to deadlock basics instead of grinding.
+
+**Both coordinators hold their structural invariants** under
+`tools/coordinator_check.py`, which drives a whole interview through each
+of them with every model call stubbed and asserts what is meant to be true
+by construction: the question cap is honoured, a wrap-up turn actually
+reaches the candidate, the questionnaire is steered by the read on the
+answer it is reacting to, and no question is written and then thrown away.
+It needs no API keys and no running bridge. Three real control-flow bugs in
+the agent path were found and fixed this way.
+
+**Open, and named honestly:**
+
+- The quality comparison between coordinators hasn't been run — flipping
+  `interviewer.coordinator` and diffing two `tools/quality_check.py hostile`
+  transcripts to see whether the LLM main agent actually interviews better
+  than the deterministic ladder, or just costs three more round-trips a
+  question. `code` stays the default until that says otherwise.
+- That comparison should look at one case specifically: in a live run, a
+  confidently wrong claim ("SQLite handles concurrent writes better than
+  Postgres") was read as *thin* rather than *wrong* on the critical path,
+  so the agent dug instead of challenging it in the room. The background
+  scorer on the stronger model caught it and it landed in the scorecard —
+  but catching it a turn earlier is the whole point of the `challenge` rung.
+- Whether the *quality* of real Tavily results is good for a given role is
+  worth a look once a funded key is in `.env`. The code path (search →
+  digest → distillation → cached brief) is verified; the usefulness of what
+  comes back for each role is a judgement call nobody has made yet.
+- Cerebras is wired up and substantially faster, which matters when a
+  person is waiting for the next question. That account currently returns
+  `402 Payment required` on completions, which is why OpenAI is the default.
+
+A fully spoken interview isn't built and isn't planned: `pipeline.py`'s mic
+path turns speech into the answer box's text and negotiates no outbound
+audio at all. The interviewer is a reader and a writer, not a voice.
