@@ -70,6 +70,10 @@ export function InterviewScreen({
 
   return (
     <div className={s.shell}>
+      {/* The round name is the page's heading. It is drawn in the bar at
+          label size, so the real h1 is here and hidden - a page with no h1
+          leaves anyone navigating by heading with nothing to land on. */}
+      <h1 className="srOnly">{session.mode.name} interview</h1>
       <div className={s.bar}>
         <div className={s.barInner}>
           <span className={s.barTitle}>

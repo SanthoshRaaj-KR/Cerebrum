@@ -287,7 +287,7 @@ export default function Home() {
 
   if (stage === "resume" && mode) {
     return (
-      <div className={ui.page}>
+      <main className={ui.page}>
         {error && <p className={`${ui.notice} ${ui.noticeBad}`}>{error}</p>}
         <ResumeStep
           mode={mode}
@@ -303,12 +303,12 @@ export default function Home() {
           onStart={() => begin(mode, resume)}
           onFile={handleFile}
         />
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className={ui.page}>
+    <main className={ui.page}>
       {bridgeError && (
         <p className={`${ui.notice} ${ui.noticeBad}`}>{bridgeError}</p>
       )}
@@ -318,6 +318,6 @@ export default function Home() {
         busy={busy || !!bridgeError}
         onPick={pickRound}
       />
-    </div>
+    </main>
   );
 }

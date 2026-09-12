@@ -97,7 +97,7 @@ function QuestionCard({ v }: { v: AnswerVerdict }) {
             Question {v.index}
             {v.competency && ` · ${v.competency}`}
           </p>
-          <p className={s.qText}>{v.question}</p>
+          <h3 className={s.qText}>{v.question}</h3>
         </div>
         <Badge tone={DEPTH_TONE[v.depth]}>
           <DepthIcon depth={v.depth} />
@@ -166,7 +166,7 @@ export function ReportScreen({
   const resumeRound = session.mode.key === "resume_projects";
 
   return (
-    <div className={`${ui.page} ${ui.pageWide}`}>
+    <main className={`${ui.page} ${ui.pageWide}`}>
       <header className={s.verdict}>
         <div className={ui.eyebrow}>
           <ModeIcon mode={session.mode.key} size={14} />
@@ -347,6 +347,6 @@ export function ReportScreen({
           Take another round
         </Button>
       </div>
-    </div>
+    </main>
   );
 }
