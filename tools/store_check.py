@@ -228,6 +228,9 @@ def check_disabled_path() -> None:
 
 
 async def _round_trip() -> None:
+    version = await store.ping()
+    print(f"{OK} connected, MongoDB {version}")
+
     session, card, system = _sample()
 
     new_id = await store.save(session, card, system)
@@ -278,20 +281,21 @@ def check_round_trip() -> None:
         print(f"{WARN} MONGODB_URI not set - round trip skipped")
         print("       add it to .env and run this again to check the real thing")
         return
+    # One event loop for all of it. An AsyncMongoClient binds to the loop
+    # that created it, so connecting inside one asyncio.run() and querying
+    # inside the next is a use-after-close - and the driver reports that as
+    # a bare RuntimeError, which is a genuinely confusing thing to debug.
+    async def run() -> None:
+        try:
+            await _round_trip()
+        finally:
+            await store.close()
+
     try:
-        version = asyncio.run(store.ping())
-        print(f"{OK} connected, MongoDB {version}")
-    except Exception as exc:  # noqa: BLE001
-        print(f"{BAD} {exc}")
-        _fail("could not reach the database")
-        return
-    try:
-        asyncio.run(_round_trip())
+        asyncio.run(run())
     except Exception as exc:  # noqa: BLE001
         print(f"{BAD} round trip failed: {type(exc).__name__}: {exc}")
         _fail("round trip failed")
-    finally:
-        asyncio.run(store.close())
 
 
 def main() -> int:

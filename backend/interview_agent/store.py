@@ -113,7 +113,14 @@ def _wrap(exc: Exception) -> StorageError:
             "couldn't reach the database - check MONGODB_URI, and that this "
             "machine's IP is allowed if you're on Atlas"
         )
-    return StorageError(f"the database refused that: {type(exc).__name__}")
+    # The type alone is not enough to act on - it sent me looking in the
+    # wrong place once already. Truncated because a driver error can run to
+    # several lines of topology description, and this ends up on a button.
+    detail = str(exc).strip().splitlines()[0][:140] if str(exc).strip() else ""
+    return StorageError(
+        f"the database refused that: {type(exc).__name__}"
+        + (f" - {detail}" if detail else "")
+    )
 
 
 # -- writing -----------------------------------------------------------------
