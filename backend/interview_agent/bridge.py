@@ -85,6 +85,13 @@ def _session_state(session: interviewer_mod.InterviewSession) -> dict:
         "pacing": {
             "questionsAsked": len(session.turns),
             "maxQuestions": session.question_cap,
+            # An estimate, not a schedule - the interview really ends on
+            # coverage. It is here so the progress bar has something honest
+            # to fill against and the candidate can see the shape of what
+            # they have sat down to before question one.
+            "plannedQuestions": session.planned_questions,
+            "estimatedMinutes": session.estimated_minutes,
+            "competencyCount": len(session.brief.competencies) if session.brief else 0,
             "closing": session.closing,
         },
         "turns": [t.to_dict() for t in session.turns],

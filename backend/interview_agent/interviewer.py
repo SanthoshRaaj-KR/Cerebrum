@@ -138,6 +138,32 @@ class InterviewSession:
         neither the coordinator nor the main agent has to care which."""
         return gateway if self.mode_key == gateway.MODE_KEY else questionnaire
 
+    # Roughly how long one question-and-answer exchange takes, spoken or
+    # typed. Only ever used to turn a question count into an estimate for
+    # the candidate - nothing is timed and nothing is scored on it.
+    MINUTES_PER_QUESTION = 2
+
+    @property
+    def planned_questions(self) -> int:
+        """About how many questions this interview will run.
+
+        An estimate, not a schedule. The interview actually ends on
+        coverage - every competency settled - so the honest prediction is
+        one question per competency plus room for the follow-ups that
+        reacting to answers always produces, clamped into the configured
+        band. It exists so the candidate can see the shape of what they
+        have agreed to instead of answering into an open-ended void.
+        """
+        names = self._competency_names()
+        if not names:
+            return self.question_cap
+        estimate = round(len(names) * 1.4)
+        return max(settings.min_questions, min(self.question_cap, estimate))
+
+    @property
+    def estimated_minutes(self) -> int:
+        return self.planned_questions * self.MINUTES_PER_QUESTION
+
     @property
     def closing(self) -> bool:
         """True once the wrap-up question has been sent - the interview
