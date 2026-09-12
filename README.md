@@ -62,6 +62,14 @@ one thing ever put to your face — gets a second focused opinion before it
 counts, because telling a candidate they're wrong when they're right is the
 worst thing this system can do.
 
+**And it keeps them, if you ask it to.** One report tells you how a round
+went. A shelf of them tells you whether the thing you were told to work on
+last time actually moved — which is the only question a practice tool is
+really for. Press **Store** on a finished report and it goes to MongoDB;
+the library then shows your score trend, your strongest rounds, and the
+competencies that keep coming back as gaps. Nothing is ever saved without
+that press, and nothing mid-interview is saved at all.
+
 ---
 
 ## The shape of an interview
@@ -190,6 +198,7 @@ browser can't route to. Run on the host if you want to dictate answers.
 | The interviewer (faster alternative) | Cerebras | Set `interviewer.provider: cerebras` — [cloud.cerebras.ai](https://cloud.cerebras.ai) |
 | Role research | Tavily | Free tier — [tavily.com](https://tavily.com) |
 | Speech-to-text, so you can speak an answer | Deepgram | Free tier — [console.deepgram.com](https://console.deepgram.com) |
+| Keeping your interviews (optional) | MongoDB | Free tier on Atlas, or a local `mongod` — it is only a URI |
 
 **Three keys, not five.** The interview is typed — the interviewer never
 speaks, so there is no text-to-speech to pay for — and the LLM needs only
@@ -207,6 +216,10 @@ Keys go in `.env` — see `.env.example`:
   typing it.
 - **`TAVILY_API_KEY`** — the role research. Required unless
   `research.enabled` is `false`.
+- **`MONGODB_URI`** — optional. Where a stored interview goes. Leave it
+  blank and everything still runs; the console simply never offers to keep
+  anything. Atlas (`mongodb+srv://…`) and a local `mongod`
+  (`mongodb://127.0.0.1:27017/`) both work.
 
 The provider you *didn't* pick can stay blank. Startup demands only the
 keys your config actually uses, and names the missing one if you switch
@@ -215,6 +228,45 @@ providers without adding its key.
 ```powershell
 .\start.ps1 -Check      # check all of them before relying on them
 ```
+
+---
+
+## Your library
+
+Everything you chose to keep, and what it adds up to.
+
+```
+  a finished report ──[ Store ]──► MongoDB
+                                     │
+                                     ▼
+  the library      score trend · average · best · direction of travel
+      │            by round: where you are strong
+      │            keeps coming back: the competencies that are still gaps
+      ▼
+  any saved report, re-read in full - same screen, same detail
+```
+
+**The saved copy is the report you read.** Writing a scorecard is an LLM
+call, so it is written once and kept on the session; a second read hands
+back the same object rather than a fresh opinion. Without that, Store
+would save a verdict nobody ever saw.
+
+**What is stored** is a snapshot, not a set of references — it has to
+render the same in a year, after the prompts have moved on and the model
+has been swapped. That includes which model judged it. The transcript,
+every per-answer judgement, the competency table, the sources, and (for
+the résumé round) the CV it was built from.
+
+**What is not stored**: the crib sheet of real questions found during
+research, and the private per-turn notes. They are kept out of the
+database for the same reason they are kept out of the browser.
+
+Turning it off is the default. With no `MONGODB_URI` the button never
+appears, the library explains how to switch it on, and nothing else
+changes. `python tools/store_check.py` verifies both paths — with a URI it
+does the whole round trip and asserts that what comes back out is what
+went in; without one it checks the document shape and that nothing private
+leaks into it.
 
 ---
 
@@ -294,6 +346,8 @@ machine; each screen is its own file, built on shared primitives in
   hard ceiling, and once, before the first answer, the plan: how many
   questions, roughly how long, which areas. Type an answer or dictate it.
   Nothing evaluative appears here at any point.
+- **Library** — every interview you kept: score trend, per-round
+  breakdown, recurring gaps, and a way back into any single report.
 - **Report** — the only evaluative screen. Verdict and score, what held up
   and what didn't, then **every question taken apart**: what you said, what
   it showed, what went wrong or was still missing, what a strong answer
@@ -309,15 +363,36 @@ the way a hand-drawn one would. It shows the machinery and none of the
 judgements: which agents run is fine to see mid-interview, how any given
 answer was read is not.
 
+It is built to be looked at, not just read. An ambient gradient field
+behind every screen, glass panels over it, the score as an animated ring
+with the number inside it, the competencies as a radar beside the table
+that carries the actual reading, and the questions on a timeline rail
+rather than as a stack of detached cards. The live question types itself
+in at reading pace — click to skip it.
+
+None of that is allowed to say anything. The coverage constellation in the
+interview bar uses exactly one colour: a node is lit or it is not. A
+second colour would come to mean *and it went well*, and the whole
+judge/speak split exists so that opinion cannot reach you mid-interview.
+
+Motion is defined once, in `web/app/motion.ts`, and honoured once —
+`<MotionConfig reducedMotion="user">` at the root, so
+`prefers-reduced-motion` turns every transform into an opacity change and
+leaves the layout alone. Charts render at their final state; the ambient
+field stops drifting but stays, because depth is not motion.
+
 Both themes, light by default, remembered per browser and applied before
-first paint. Everything reads down to 375px. Nothing is authenticated — the
+first paint. Everything reads down to 375px, with the radar and the
+constellation dropped on narrow screens — both are the impressionistic
+read, and the list beside each one names every area in full. Nothing is authenticated — the
 bridge binds to `127.0.0.1` only, the same posture as any single-user local
 tool.
 
-Nothing persists across restarts: no database, no session log. The résumé
-profile and the session die with the bridge process; the research cache
-under `.cache/` survives it (14-day TTL, keyed per role/level/mode) so a
-second session on the same role doesn't pay for the search again.
+The interview itself still doesn't persist: the résumé profile and the
+live session die with the bridge process. Two things outlive it — the
+research cache under `.cache/` (14-day TTL, keyed per role/level/mode), so
+a second session on the same role doesn't pay for the search again, and
+any interview you explicitly pressed Store on.
 
 ---
 
@@ -329,6 +404,7 @@ second session on the same role doesn't pay for the search again.
 | `backend/interview_agent/prompts/` | One module per round — name, blurb, default role, focus |
 | `web/app/` | The console: state machine, three screens, tokens, primitives |
 | `tools/coordinator_check.py` | Drives a whole interview through both coordinators with every model call stubbed. No keys needed |
+| `tools/store_check.py` | Checks the saved-interview layer, with or without a database |
 | `tools/quality_check.py` | Scripted end-to-end runs against a real model |
 | `tools/launcher/` | The desktop launcher and its build script |
 | `design-system/cerebrum/` | The design system the console is built to |
