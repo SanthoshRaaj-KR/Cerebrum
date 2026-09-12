@@ -41,6 +41,10 @@ import urllib.request
 BASE = os.environ.get("INTERVIEW_AGENT_URL", "http://localhost:7332")
 
 DEFAULT_TEST_CAP = 10
+
+# The one round built from the candidate's own work; every other round is a
+# subject round and is started with no résumé at all.
+RESUME_MODE = "resume_projects"
 # Runaway guard only - the per-session maxQuestions cap should end things
 # well before this.
 MAX_TEST_TURNS = 30
@@ -156,9 +160,10 @@ def run(
         "/api/session/start",
         {
             "mode": mode,
-            "role": "Backend Engineer",
-            "level": "Fresher",
-            "resume": resume,
+            # The round decides the role now, and only the résumé round
+            # wants a CV. Sending one for a subject round would test a
+            # path the console no longer takes.
+            "resume": resume if mode == RESUME_MODE else "",
             "maxQuestions": cap,
         },
     )
@@ -219,7 +224,11 @@ def survey(cap: int = DEFAULT_TEST_CAP) -> None:
         post("/api/session/reset")
         st = post(
             "/api/session/start",
-            {"mode": m, "role": "Backend Engineer", "level": "Fresher", "resume": resume, "maxQuestions": cap},
+            {
+                "mode": m,
+                "resume": resume if m == RESUME_MODE else "",
+                "maxQuestions": cap,
+            },
         )
         brief = st.get("researchBrief") or {}
         opener = st["turns"][0]["question"]
