@@ -7,6 +7,13 @@
   gap: var(--space-4);
 }
 
+.mastheadActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+}
+
 .wordmark {
   font-size: var(--text-3xl);
   font-weight: var(--weight-bold);

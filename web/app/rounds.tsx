@@ -26,6 +26,7 @@ import {
   IconArrowLeft,
   IconArrowRight,
   IconCheck,
+  IconLibrary,
   IconSpark,
   ModeIcon,
 } from "./icons";
@@ -36,7 +37,16 @@ import s from "./rounds.module.css";
 
 const RESUME_MODE = "resume_projects";
 
-function Masthead({ subtitle }: { subtitle: string }) {
+function Masthead({
+  subtitle,
+  onLibrary,
+}: {
+  subtitle: string;
+  /** Only passed when saving is switched on. Without a database the
+   * library has nothing to show and nothing to offer, and a link into a
+   * wall is worse than no link. */
+  onLibrary?: () => void;
+}) {
   return (
     <motion.header
       className={s.masthead}
@@ -52,7 +62,13 @@ function Masthead({ subtitle }: { subtitle: string }) {
           {subtitle}
         </motion.p>
       </div>
-      <motion.div variants={rise}>
+      <motion.div className={s.mastheadActions} variants={rise}>
+        {onLibrary && (
+          <Button variant="secondary" onClick={onLibrary}>
+            <IconLibrary size={16} />
+            Library
+          </Button>
+        )}
         <ThemeToggle />
       </motion.div>
     </motion.header>
@@ -143,7 +159,10 @@ export function RoundPicker({
   return (
     <>
       <AmbientMesh variant="hero" />
-      <Masthead subtitle="A mock technical interview that researches the role, adapts to your answers, and reports back in detail." />
+      <Masthead
+        subtitle="A mock technical interview that researches the role, adapts to your answers, and reports back in detail."
+        onLibrary={system?.storageEnabled ? onLibrary : undefined}
+      />
       <Pitch />
       <RecentStrip recent={recent} onOpen={onLibrary} />
 

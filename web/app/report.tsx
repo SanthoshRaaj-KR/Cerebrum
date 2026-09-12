@@ -408,6 +408,27 @@ export function ReportScreen({
             {view.role && ` · ${view.role}`}
           </div>
           <span className={ui.spacerFlex} />
+          {/* Also at the top, not only in the footer. This page is long by
+              design, and an action that lives solely past the last source
+              link is an action most people never find. */}
+          {onSave && storageEnabled && (
+            <Button
+              variant={saveState === "saved" ? "ghost" : "secondary"}
+              onClick={onSave}
+              disabled={saveState !== "idle"}
+            >
+              {saveState === "saved" ? (
+                <IconCheck size={16} />
+              ) : (
+                <IconBookmark size={16} />
+              )}
+              {saveState === "saving"
+                ? "Saving…"
+                : saveState === "saved"
+                  ? "Saved"
+                  : "Store"}
+            </Button>
+          )}
           <Button variant="ghost" onClick={onRestart}>
             <IconArrowLeft size={16} />
             {backLabel ?? "Take another round"}
