@@ -97,6 +97,19 @@ class AnswerVerdict:
     depth: str = "absent"
     evidence: str = ""
     gap: str = ""
+    # The two fields the candidate actually learns from. `gap` names what
+    # was missing; these say what to have said instead and what to do about
+    # it next time. Kept separate because a report that only names gaps
+    # tells someone they were wrong without telling them anything.
+    better: str = ""
+    improve: str = ""
+    # What they actually said, carried so the report can show the answer
+    # next to the judgement of it rather than making them scroll.
+    answer: str = ""
+    skipped: bool = False
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
     def render(self) -> str:
         head = f"Q{self.index}"
@@ -119,8 +132,18 @@ _VERDICT_SCHEMA = {
         "depth": {"type": "string", "enum": list(_DEPTHS)},
         "evidence": {"type": "string"},
         "gap": {"type": "string"},
+        "better": {"type": "string"},
+        "improve": {"type": "string"},
     },
-    "required": ["competency", "correct", "depth", "evidence", "gap"],
+    "required": [
+        "competency",
+        "correct",
+        "depth",
+        "evidence",
+        "gap",
+        "better",
+        "improve",
+    ],
     "additionalProperties": False,
 }
 
@@ -149,6 +172,17 @@ right. If the claim is wrong, it is wrong no matter how well it was put.
 - gap: one short line naming what a good fresher answer would have had
   that this didn't, or what specifically was wrong and what is actually
   true. Empty string only when the answer fully held up.
+- better: two or three sentences sketching what a strong fresher answer to
+  THIS question sounds like. Not a model essay and not everything that
+  could be said - the version a good new graduate would actually give out
+  loud, concrete enough that they can hear the difference from their own.
+  When their answer already held up, say what would have taken it one
+  level further instead.
+- improve: one concrete thing to do differently next time, addressed to
+  them as "you". Actionable, not a platitude: "say which index you would
+  add and on which column" rather than "study databases more". When the
+  answer was strong, make this the harder thing to reach for rather than
+  inventing a fault.
 
 Calibrate to a FRESHER. Naming the concept, giving one worked example and
 reasoning about a trade-off out loud is a solid entry-level answer. An
@@ -176,6 +210,12 @@ async def _judge_answer(
             correct=False,
             depth="absent",
             gap="skipped this question",
+            improve=(
+                "Say what you do know and where you would start, rather than "
+                "passing - a partial answer is always worth more than silence."
+            ),
+            answer="",
+            skipped=True,
         )
 
     try:
@@ -201,7 +241,12 @@ async def _judge_answer(
         payload = json.loads(completion.choices[0].message.content or "{}")
     except Exception:  # noqa: BLE001
         logger.exception("could not judge answer %d in the background", index)
-        return AnswerVerdict(index=index, question=question, competency=note.focus)
+        return AnswerVerdict(
+            index=index,
+            question=question,
+            competency=note.focus,
+            answer=answer,
+        )
 
     competency = str(payload.get("competency", "")).strip()
     if competency not in rubric.names:
@@ -218,6 +263,10 @@ async def _judge_answer(
         depth=depth,
         evidence=str(payload.get("evidence", "")).strip(),
         gap=str(payload.get("gap", "")).strip(),
+        better=str(payload.get("better", "")).strip(),
+        improve=str(payload.get("improve", "")).strip(),
+        answer=answer,
+        skipped=False,
     )
 
 
