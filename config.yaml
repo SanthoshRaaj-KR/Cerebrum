@@ -96,6 +96,16 @@ research:
   # into the role brief.
   max_results: 5
 
+storage:
+  # Saving a finished interview so you can read it again later and see
+  # whether you're getting better. Off unless MONGODB_URI is in .env -
+  # this flag is the second switch, for turning it off while the URI stays
+  # put. Nothing is ever written without an explicit press of Store, and
+  # nothing mid-interview is written at all.
+  enabled: true
+  database: cerebrum
+  collection: interviews
+
 voice:
   # Dictation only. The candidate may speak their answer instead of typing
   # it; the transcript lands in the answer box and the normal typed flow

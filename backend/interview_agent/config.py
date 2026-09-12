@@ -36,6 +36,11 @@ class Settings:
     cerebras_api_key: str = ""
     tavily_api_key: str = ""
     brave_api_key: str = ""
+    # Saving an interview is opt-in twice over: the URI has to be here, and
+    # then you have to press the button. Absent is a perfectly good state -
+    # the whole product works without it, you just lose the interview when
+    # you close the tab.
+    mongo_uri: str = ""
     raw: dict[str, Any] = field(default_factory=dict)
 
     # -- config.yaml sections -------------------------------------------------
@@ -58,6 +63,10 @@ class Settings:
     @property
     def research(self) -> dict[str, Any]:
         return self._section("research")
+
+    @property
+    def storage(self) -> dict[str, Any]:
+        return self._section("storage")
 
     @property
     def fresher(self) -> bool:
@@ -167,6 +176,26 @@ class Settings:
     def research_max_results(self) -> int:
         return max(1, min(10, int(self.research.get("max_results", 5))))
 
+    # -- storage --------------------------------------------------------------
+
+    @property
+    def storage_enabled(self) -> bool:
+        """Whether saving a finished interview is on offer at all.
+
+        Both halves have to be true: the feature is switched on, and there
+        is somewhere to put it. Defaulting `enabled` to true means adding
+        MONGODB_URI to .env is the only step - a config file edit as well
+        would be a second thing to forget."""
+        return bool(self.storage.get("enabled", True)) and bool(self.mongo_uri)
+
+    @property
+    def storage_database(self) -> str:
+        return str(self.storage.get("database", "cerebrum")).strip() or "cerebrum"
+
+    @property
+    def storage_collection(self) -> str:
+        return str(self.storage.get("collection", "interviews")).strip() or "interviews"
+
     # There is deliberately no TTS setting here. The interviewer never
     # speaks - pipeline.py is dictation-only and negotiates no outbound
     # audio at all - so a voice.tts section would be configuring a
@@ -193,6 +222,7 @@ def load_settings() -> Settings:
         cerebras_api_key=os.environ.get("CEREBRAS_API_KEY", "").strip(),
         tavily_api_key=os.environ.get("TAVILY_API_KEY", "").strip(),
         brave_api_key=os.environ.get("BRAVE_API_KEY", "").strip(),
+        mongo_uri=os.environ.get("MONGODB_URI", "").strip(),
         raw=raw,
     )
 
