@@ -1,0 +1,134 @@
+/* Chart styling. Colour comes from the semantic tokens only - a chart
+   that hardcodes its own palette is the first thing to look wrong when a
+   theme changes. */
+
+/* -- score ring ----------------------------------------------------------- */
+
+.ring {
+  display: block;
+  overflow: visible;
+}
+
+.ringTrack {
+  stroke: var(--border);
+}
+
+.ringFill {
+  transition: stroke var(--dur) var(--ease);
+}
+
+.ring_accent .ringFill {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 8px var(--accent-wash));
+}
+
+.ring_ok .ringFill {
+  stroke: var(--ok);
+}
+
+.ring_warn .ringFill {
+  stroke: var(--warn);
+}
+
+.ring_bad .ringFill {
+  stroke: var(--bad);
+}
+
+/* -- radar ---------------------------------------------------------------- */
+
+.radar {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.radarGrid {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.radarSpoke {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.radarShape {
+  fill: var(--accent-wash);
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.radarDot {
+  fill: var(--accent);
+}
+
+/* -- sparkline ------------------------------------------------------------ */
+
+.spark {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* preserveAspectRatio is none, so the stroke would stretch with the box
+     without this. */
+  vector-effect: non-scaling-stroke;
+}
+
+.sparkGrid {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+
+.sparkArea {
+  fill: var(--accent-wash);
+}
+
+.sparkLine {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.sparkDot {
+  fill: var(--bg);
+  stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+/* -- bar ------------------------------------------------------------------ */
+
+.bar {
+  position: relative;
+  height: 6px;
+  width: 100%;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+}
+
+.bar_accent {
+  background: var(--accent);
+}
+
+.bar_ok {
+  background: var(--ok);
+}
+
+.bar_warn {
+  background: var(--warn);
+}
+
+.bar_bad {
+  background: var(--bad);
+}
