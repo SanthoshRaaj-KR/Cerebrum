@@ -11,11 +11,13 @@ speaks, so there is no voice to validate.
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 import sys
 
 import httpx
 
+from interview_agent import store
 from interview_agent.config import ROOT, settings
 
 OK = "  [ ok ]"
@@ -257,6 +259,31 @@ def _check_brave_key() -> bool:
     return False
 
 
+def check_storage() -> None:
+    """Saved interviews. Entirely optional: no URI is a warning and a skip,
+    the same way an absent Brave key is. A URI that is there but does not
+    answer is a real failure - it means Store will fail at exactly the
+    moment someone has finished an interview and wants to keep it."""
+    print("
+Saved interviews (optional)")
+    if not settings.mongo_uri:
+        print(f"{WARN} MONGODB_URI not set - interviews won't be saved")
+        return
+    if not bool(settings.storage.get("enabled", True)):
+        print(f"{WARN} storage.enabled is false in config.yaml - skipped")
+        return
+
+    try:
+        version = asyncio.run(store.ping())
+    except Exception as exc:  # noqa: BLE001
+        print(f"{BAD} {exc}")
+        _fail("MONGODB_URI is set but the database did not answer")
+        return
+    print(f"{OK} connected, MongoDB {version}")
+    print(f"{OK} database {settings.storage_database}"
+          f" / collection {settings.storage_collection}")
+
+
 def check_web() -> None:
     print("\nWeb console (web/)")
     if shutil.which("node") is None or shutil.which("npm") is None:
@@ -317,6 +344,7 @@ def main(argv: list[str] | None = None) -> int:
         check_llm,
         check_deepgram,
         check_research,
+        check_storage,
         check_web,
         check_roles_and_modes,
     ):
