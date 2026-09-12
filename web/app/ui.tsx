@@ -3,9 +3,11 @@
 /* Shared primitives. Everything visual in the console is built from these,
  * so a change to how a button or a status badge reads happens once. */
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import s from "./ui.module.css";
-import { IconMoon, IconSun } from "./icons";
+import { IconCheck, IconMoon, IconSun } from "./icons";
+import { ease, inView, pop, rise, stagger } from "./motion";
 
 type Tone = "ok" | "warn" | "bad" | "neutral";
 
@@ -160,6 +162,192 @@ export function ThemeToggle() {
     >
       {theme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
     </button>
+  );
+}
+
+/* -- motion wrappers ------------------------------------------------------
+ *
+ * Thin on purpose. Each one exists so a screen can say "this section
+ * arrives" without repeating the variant and the viewport config, and so
+ * the timing can be changed in motion.ts rather than in forty files.
+ */
+
+/** A block that rises into place when it is scrolled to. */
+export function Reveal({
+  children,
+  className,
+  delay = 0,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+}) {
+  return (
+    <motion.div
+      className={className}
+      variants={rise}
+      {...inView}
+      transition={{ ...ease, delay }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/** A container whose direct children arrive one after another. Pair with
+ * <Reveal> children, or anything using the `rise` variant. */
+export function Stagger({
+  children,
+  className,
+  step,
+  as = "div",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  step?: number;
+  as?: "div" | "ul" | "section";
+}) {
+  const Tag = motion[as];
+  return (
+    <Tag className={className} variants={stagger(step)} {...inView}>
+      {children}
+    </Tag>
+  );
+}
+
+/** One item inside a <Stagger>. */
+export function StaggerItem({
+  children,
+  className,
+  as = "div",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  as?: "div" | "li" | "article";
+}) {
+  const Tag = motion[as];
+  return (
+    <Tag className={className} variants={rise}>
+      {children}
+    </Tag>
+  );
+}
+
+/* -- surfaces ------------------------------------------------------------- */
+
+/** A panel that sits on the ambient mesh rather than covering it.
+ * `solid` opts out for anything holding long-form text - a paragraph read
+ * through a blurred gradient is a paragraph read slowly. */
+export function GlassCard({
+  children,
+  className,
+  solid,
+  glow,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  solid?: boolean;
+  glow?: boolean;
+}) {
+  return (
+    <div
+      className={[s.glass, solid ? s.glassSolid : "", glow ? s.glassGlow : "", className]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* -- feedback ------------------------------------------------------------- */
+
+/**
+ * A transient confirmation.
+ *
+ * Auto-dismisses, per the toast guideline, but is also a live region:
+ * something that only announces itself by appearing in the corner has not
+ * announced itself to anyone using a screen reader. `status` rather than
+ * `alert` because a successful save is not an interruption.
+ */
+export function Toast({
+  message,
+  tone = "ok",
+  onDone,
+}: {
+  message: string | null;
+  tone?: "ok" | "bad";
+  onDone: () => void;
+}) {
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(onDone, tone === "bad" ? 6000 : 4000);
+    return () => clearTimeout(t);
+  }, [message, tone, onDone]);
+
+  return (
+    <div className={s.toastWrap} role="status" aria-live="polite">
+      <AnimatePresence>
+        {message && (
+          <motion.div
+            className={`${s.toast} ${tone === "bad" ? s.toastBad : s.toastOk}`}
+            variants={pop}
+            initial="hidden"
+            animate="shown"
+            exit="exit"
+          >
+            {tone === "ok" && <IconCheck size={15} />}
+            {message}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * A destructive action that asks first.
+ *
+ * Two presses rather than a modal: a dialog for deleting one row is heavy,
+ * and it takes focus somewhere else and then has to give it back. The
+ * armed state times out on its own so a stray click cannot leave a live
+ * delete button sitting on the page.
+ */
+export function ConfirmButton({
+  label,
+  confirmLabel,
+  onConfirm,
+  disabled,
+}: {
+  label: React.ReactNode;
+  confirmLabel: string;
+  onConfirm: () => void;
+  disabled?: boolean;
+}) {
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+
+  return (
+    <Button
+      variant={armed ? "secondary" : "ghost"}
+      className={armed ? s.confirmArmed : ""}
+      disabled={disabled}
+      onClick={() => {
+        if (armed) {
+          onConfirm();
+          setArmed(false);
+        } else {
+          setArmed(true);
+        }
+      }}
+    >
+      {armed ? confirmLabel : label}
+    </Button>
   );
 }
 

@@ -282,3 +282,82 @@
 .spacerFlex {
   flex: 1;
 }
+
+/* -- glass ---------------------------------------------------------------
+   A panel that lets the ambient mesh through instead of covering it.
+   backdrop-filter is the whole effect, and it is one of the few properties
+   that genuinely costs something to composite - so it is opt-in per panel
+   rather than applied to every card on the page. */
+
+.glass {
+  position: relative;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+}
+
+/* For panels carrying long-form text. Reading a paragraph through a
+   blurred gradient is reading it slowly, and the report is made of
+   paragraphs. */
+.glassSolid {
+  background: var(--surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: var(--border);
+}
+
+.glassGlow {
+  box-shadow: var(--glow-accent);
+}
+
+/* -- toast ---------------------------------------------------------------- */
+
+.toastWrap {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-6);
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  /* Clear of the iOS home indicator and any bottom bar. */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-full);
+  border: 1px solid;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  box-shadow: var(--shadow-lg);
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.toastOk {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.toastBad {
+  color: var(--bad);
+  border-color: var(--bad);
+  /* An error the user has to read is allowed to wrap; a success is not. */
+  white-space: normal;
+  max-width: min(90vw, 40ch);
+}
+
+/* The armed half of a two-press delete. Deliberately loud - the whole
+   point is that the second press does not look like the first. */
+.confirmArmed {
+  color: var(--bad);
+  border-color: var(--bad);
+  background: var(--bad-wash);
+}
