@@ -31,18 +31,18 @@ function useCountUp(value: number, decimals = 1) {
   const ref = useRef<HTMLSpanElement | null>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
   const reduced = useReducedMotion();
-  const [shown, setShown] = useState(reduced ? value : 0);
+  const [counted, setCounted] = useState(0);
+
+  // Derived, not stored: under reduced motion the final value is simply
+  // what renders, with no state to set and so no cascading render.
+  const shown = reduced ? value : counted;
 
   useEffect(() => {
-    if (!inView) return;
-    if (reduced) {
-      setShown(value);
-      return;
-    }
+    if (!inView || reduced) return;
     const controls = animate(0, value, {
       duration: 1.1,
       ease: [0.16, 1, 0.3, 1],
-      onUpdate: (v) => setShown(v),
+      onUpdate: (v) => setCounted(v),
     });
     return () => controls.stop();
   }, [inView, value, reduced]);

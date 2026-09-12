@@ -4,40 +4,52 @@
  * The console.
  *
  * This file owns the state machine and the calls to the bridge; every
- * screen is its own component. Four stages:
+ * screen is its own component. Six stages:
  *
- *   rounds  -> pick one. For five of the six, that starts the interview.
- *   resume  -> only ever reached by picking the résumé round, which needs
- *              a CV because a CV is that round's entire syllabus.
+ *   rounds    -> pick one. For five of the six, that starts the interview.
+ *   resume    -> only ever reached by picking the résumé round, which needs
+ *                a CV because a CV is that round's entire syllabus.
  *   interview
- *   report
+ *   report    -> the live one, with the option to keep it
+ *   library   -> everything kept, and whether you are getting better
+ *   archive   -> one kept interview, read back
  *
  * Nothing is asked for that a round will not use. The round is the role,
  * the level comes from config, and the résumé is requested exactly once,
  * in the one place it matters.
+ *
+ * `report` and `archive` render the same component from the same
+ * `ReportView`. Two report screens would drift, and the saved one - the
+ * one you come back to months later - would be the one that rotted.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Mode,
+  SavedSummary,
   Scorecard,
   SessionState,
   SystemInfo,
   extractResume,
   getHealth,
+  getInterview,
   getReport,
+  listInterviews,
   resetSession,
+  saveInterview,
   startSession,
   submitAnswer,
 } from "@/lib/api";
 import { MicSession, MicStatus } from "@/lib/webrtc";
 import { InterviewScreen } from "./interview";
-import { ReportScreen } from "./report";
+import { LibraryScreen } from "./library";
+import { AmbientMesh } from "./mesh";
+import { ReportScreen, ReportView } from "./report";
 import { ResumeStep, RoundPicker } from "./rounds";
 import { BuildingReport, StartingUp } from "./waiting";
-import { ui } from "./ui";
+import { Toast, ui } from "./ui";
 
-type Stage = "rounds" | "resume" | "interview" | "report";
+type Stage = "rounds" | "resume" | "interview" | "report" | "library" | "archive";
 
 const RESUME_MODE = "resume_projects";
 
@@ -62,9 +74,19 @@ export default function Home() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Saved interviews.
+  const [recent, setRecent] = useState<SavedSummary[]>([]);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [archive, setArchive] = useState<ReportView | null>(null);
+  const [toast, setToast] = useState<{ text: string; tone: "ok" | "bad" } | null>(
+    null
+  );
+
   const [micStatus, setMicStatus] = useState<MicStatus>("idle");
   const [interim, setInterim] = useState("");
   const micRef = useRef<MicSession | null>(null);
+
+  const storageEnabled = !!system?.storageEnabled;
 
   useEffect(() => {
     getHealth()
@@ -76,6 +98,17 @@ export default function Home() {
       );
     return () => micRef.current?.stop();
   }, []);
+
+  /** The strip of recent scores on the rounds screen. Best-effort: a
+   * database that is down should never stop you taking an interview. */
+  const refreshRecent = useCallback(() => {
+    if (!storageEnabled) return;
+    listInterviews()
+      .then((d) => setRecent(d.interviews))
+      .catch(() => {});
+  }, [storageEnabled]);
+
+  useEffect(refreshRecent, [refreshRecent]);
 
   /** Picking a round. Five of six go straight into the interview; only the
    * résumé round has anything left to ask for. */
@@ -100,6 +133,7 @@ export default function Home() {
       setReport(null);
       setAnswer("");
       setPending(null);
+      setSaveState("idle");
       setStage("interview");
     } catch (err) {
       setError(
@@ -125,9 +159,7 @@ export default function Home() {
       const { text } = await extractResume(file);
       setResume(text);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Couldn't read that PDF."
-      );
+      setError(err instanceof Error ? err.message : "Couldn't read that PDF.");
     } finally {
       setParsing(false);
     }
@@ -150,9 +182,7 @@ export default function Home() {
       // Their typed answer stays in the box - losing a long one to a blip
       // is not something anyone should have to retype from memory.
       setPending(null);
-      setError(
-        err instanceof Error ? err.message : "Couldn't send that answer."
-      );
+      setError(err instanceof Error ? err.message : "Couldn't send that answer.");
     } finally {
       setBusy(false);
     }
@@ -165,14 +195,69 @@ export default function Home() {
       const state = await getReport();
       setSession(state);
       setReport(state.scorecard);
+      setSaveState("idle");
       setStage("report");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Couldn't build the report."
-      );
+      setError(err instanceof Error ? err.message : "Couldn't build the report.");
     } finally {
       setBusy(false);
       setFinishing(false);
+    }
+  }
+
+  /** Keeping the interview. Explicit, and only ever after the report - the
+   * bridge refuses anything else. */
+  async function keep() {
+    if (saveState !== "idle") return;
+    setSaveState("saving");
+    try {
+      await saveInterview();
+      setSaveState("saved");
+      setToast({ text: "Kept. It's in your library.", tone: "ok" });
+      refreshRecent();
+    } catch (err) {
+      setSaveState("idle");
+      setToast({
+        text: err instanceof Error ? err.message : "Couldn't save that.",
+        tone: "bad",
+      });
+    }
+  }
+
+  async function openSaved(id: string) {
+    setBusy(true);
+    try {
+      const doc = await getInterview(id);
+      setArchive({
+        mode: doc.mode,
+        role: doc.role,
+        questionCount: doc.questionCount,
+        savedAt: doc.savedAt,
+        card: {
+          verdict: doc.verdict,
+          score: doc.score,
+          headline: doc.headline,
+          strengths: doc.strengths,
+          gaps: doc.gaps,
+          notes: doc.notes,
+          competencies: doc.competencies,
+          sources: doc.sources,
+          grounded: doc.grounded,
+          answers: doc.answers,
+        },
+        provenance: doc.system.scorerModel
+          ? { scorerModel: doc.system.scorerModel }
+          : null,
+      });
+      setStage("archive");
+      window.scrollTo({ top: 0 });
+    } catch (err) {
+      setToast({
+        text: err instanceof Error ? err.message : "Couldn't open that one.",
+        tone: "bad",
+      });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -186,7 +271,10 @@ export default function Home() {
     setError(null);
     setMode(null);
     setFinishing(false);
+    setArchive(null);
+    setSaveState("idle");
     setStage("rounds");
+    refreshRecent();
   }
 
   function stopMic() {
@@ -213,6 +301,14 @@ export default function Home() {
     micRef.current = mic;
     mic.start();
   }
+
+  const toastEl = (
+    <Toast
+      message={toast?.text ?? null}
+      tone={toast?.tone ?? "ok"}
+      onDone={() => setToast(null)}
+    />
+  );
 
   // -- waiting ------------------------------------------------------------
 
@@ -244,24 +340,65 @@ export default function Home() {
   if (finishing && session) {
     return (
       <div className={ui.page}>
-        <BuildingReport
-          title={session.mode.name}
-          count={session.turns.length}
-        />
+        <BuildingReport title={session.mode.name} count={session.turns.length} />
       </div>
     );
   }
 
   // -- screens ------------------------------------------------------------
 
+  if (stage === "archive" && archive) {
+    return (
+      <>
+        <ReportScreen
+          view={archive}
+          onRestart={() => {
+            setArchive(null);
+            setStage("library");
+          }}
+          backLabel="Back to your library"
+        />
+        {toastEl}
+      </>
+    );
+  }
+
+  if (stage === "library") {
+    return (
+      <>
+        <LibraryScreen
+          storageEnabled={storageEnabled}
+          onBack={() => setStage("rounds")}
+          onOpen={openSaved}
+        />
+        {toastEl}
+      </>
+    );
+  }
+
   if (stage === "report" && session && report) {
     return (
-      <ReportScreen
-        session={session}
-        report={report}
-        system={system}
-        onRestart={restart}
-      />
+      <>
+        <ReportScreen
+          view={{
+            mode: session.mode,
+            role: session.role,
+            questionCount: session.turns.length,
+            card: report,
+            provenance: system
+              ? {
+                  scorerModel: system.scorerModel,
+                  doubleCheckWrong: system.doubleCheckWrong,
+                }
+              : null,
+          }}
+          onRestart={restart}
+          onSave={keep}
+          saveState={saveState}
+          storageEnabled={storageEnabled}
+        />
+        {toastEl}
+      </>
     );
   }
 
@@ -308,16 +445,22 @@ export default function Home() {
   }
 
   return (
-    <main className={ui.page}>
-      {bridgeError && (
-        <p className={`${ui.notice} ${ui.noticeBad}`}>{bridgeError}</p>
-      )}
-      {error && <p className={`${ui.notice} ${ui.noticeBad}`}>{error}</p>}
-      <RoundPicker
-        system={system}
-        busy={busy || !!bridgeError}
-        onPick={pickRound}
-      />
-    </main>
+    <>
+      <AmbientMesh variant="hero" />
+      <main className={ui.page}>
+        {bridgeError && (
+          <p className={`${ui.notice} ${ui.noticeBad}`}>{bridgeError}</p>
+        )}
+        {error && <p className={`${ui.notice} ${ui.noticeBad}`}>{error}</p>}
+        <RoundPicker
+          system={system}
+          busy={busy || !!bridgeError}
+          recent={recent}
+          onPick={pickRound}
+          onLibrary={() => setStage("library")}
+        />
+      </main>
+      {toastEl}
+    </>
   );
 }
