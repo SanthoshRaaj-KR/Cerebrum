@@ -21,7 +21,7 @@
 .horizon {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, var(--horizon) 0%, transparent 62%);
+  background: linear-gradient(180deg, var(--horizon) 0%, transparent 78%);
 }
 
 /* -- the rings ------------------------------------------------------------

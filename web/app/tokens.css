@@ -319,7 +319,7 @@
     /* Far weaker than obsidian's. A coloured wash under long-form reading
        is the fastest way to make a report tiring, and the report is the
        part people actually read. */
-    --horizon: rgba(202, 191, 174, 0.5);
+    --horizon: rgba(202, 191, 174, 0.34);
     --mesh-opacity: 1;
 
     --ring: rgba(109, 40, 217, 0.09);
@@ -384,7 +384,7 @@
   --glow-ok: 0 0 26px -6px rgba(21, 128, 61, 0.4);
   --glow-bad: 0 0 26px -6px rgba(190, 18, 60, 0.35);
 
-  --horizon: rgba(202, 191, 174, 0.5);
+  --horizon: rgba(202, 191, 174, 0.34);
   --mesh-opacity: 1;
 
   --ring: rgba(109, 40, 217, 0.09);
