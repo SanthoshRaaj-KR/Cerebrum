@@ -102,8 +102,15 @@ class RoleBrief:
 # -- cache -------------------------------------------------------------------
 
 
+# Bumped whenever the research queries or the distill prompt change in a
+# way that should invalidate what is already on disk. Without this a brief
+# cached under the old, level-unanchored searches would keep being served
+# for the rest of its 14 days, and the fix would look like it did nothing.
+_BRIEF_VERSION = 2
+
+
 def _cache_key(role: str, level: str, mode_key: str) -> str:
-    raw = f"{role.strip().lower()}|{level.strip().lower()}|{mode_key}"
+    raw = f"v{_BRIEF_VERSION}|{role.strip().lower()}|{level.strip().lower()}|{mode_key}"
     return hashlib.sha1(raw.encode()).hexdigest()
 
 
@@ -151,28 +158,63 @@ def _save_cache(key: str, brief: RoleBrief) -> None:
 # -- search --------------------------------------------------------------
 
 
-async def _gather_raw(role: str, mode: Mode) -> tuple[str, list[str]]:
+# Words that all mean "this is someone's first job". Any of them makes the
+# searches say "entry level" explicitly rather than passing the level
+# through raw, because search engines have far more indexed content for
+# that phrase than for "fresher" alone outside India.
+_ENTRY_LEVEL_WORDS = {
+    "fresher", "freshers", "entry level", "entry-level", "graduate",
+    "new grad", "new graduate", "student", "intern", "beginner", "junior",
+}
+
+
+def _is_entry_level(level: str) -> bool:
+    return level.strip().lower() in _ENTRY_LEVEL_WORDS
+
+
+async def _gather_raw(role: str, mode: Mode, level: str) -> tuple[str, list[str]]:
     """Runs the searches, returns (digest text for the LLM, source urls).
 
     Four angles rather than one: what is actually asked, what is asked
-    RIGHT NOW, what the role actually requires, and the entry-level framing
-    specifically - a bare "{role} interview questions" search skews hard
-    toward senior content.
+    RIGHT NOW, what the role actually requires, and the round's own framing.
 
-    The recency query carries the current year explicitly. Interview content
-    dates faster than it looks: the questions an AI engineer gets asked
-    moved more in the last two years than a backend syllabus moved in ten,
-    and a search that does not say "this year" happily returns a listicle
-    from 2019. The mode name goes in too, so an LLD round pulls
-    object-design questions rather than whatever the role is asked in
-    general.
+    **Every one of them carries the level.** A bare "{role} interview
+    questions" search skews hard toward senior content - it returns
+    distributed-systems war stories for a role whose real screen is "what
+    is an index" - and one unanchored query out of four is enough on its
+    own, because `real_questions` is lifted straight out of this digest and
+    becomes what the interviewer pitches from. The recency query used to be
+    exactly that unanchored shape.
+
+    For an entry level, one query also says "0 to 1 years experience" in so
+    many words. That is the phrase job postings actually use, and it pulls
+    the postings written for people with no experience rather than the ones
+    that merely say "junior" in the title and then ask for three years.
+
+    The year is explicit on two of them. Interview content dates faster
+    than it looks: the questions an AI engineer gets asked moved more in
+    the last two years than a backend syllabus moved in ten, and a search
+    that does not say "this year" happily returns a listicle from 2019. The
+    mode name goes in too, so an LLD round pulls object-design questions
+    rather than whatever the role is asked in general.
     """
     year = datetime.date.today().year
+    lv = level.strip() or "fresher"
+    entry = _is_entry_level(lv)
+    # "entry level" for anything that means a first job; otherwise the level
+    # as the candidate typed it, so this still works if `fresher` is off.
+    phrase = "entry level" if entry else lv
+
     queries = [
-        f"{role} fresher interview questions asked",
-        f"most asked {role} interview questions {year}",
-        f"entry level {role} technical interview questions {mode.name}",
-        f"{role} fresher job description required skills {year}",
+        f"{role} {lv} interview questions asked",
+        f"{phrase} {role} interview questions {year}",
+        f"{phrase} {role} technical interview questions {mode.name}",
+        (
+            f"{role} {lv} job description required skills"
+            f" 0 to 1 years experience {year}"
+            if entry
+            else f"{role} {lv} job description required skills {year}"
+        ),
     ]
     outcome = await search.gather(queries, settings.research_max_results)
 
@@ -239,6 +281,13 @@ Produce:
   show up again and again - those are what this role is really being asked.
   Empty list if the sources gave you nothing concrete to quote; do not
   invent questions to fill this field.
+  DROP anything that only makes sense to someone who has already held the
+  job: running an incident, operating a cluster, owning a migration,
+  tuning something in production, or a senior system-design question in a
+  fresher's clothing. Search will hand you some of these no matter how the
+  query is worded, and a question someone with zero years cannot fairly be
+  expected to have met does not belong in this list however often it
+  appears.
 - red_flags: 3-6 claims specific to this role that a fresher might
   plausibly say and that an interviewer must not let pass unchallenged - a
   security misconception, a wrong claim about how something works, a tool
@@ -326,7 +375,7 @@ async def build_brief(candidate: CandidateContext, mode: Mode) -> RoleBrief:
 
     digest, sources = "", []
     try:
-        digest, sources = await _gather_raw(role, mode)
+        digest, sources = await _gather_raw(role, mode, level)
     except Exception:  # noqa: BLE001
         logger.exception("could not gather role research")
 
