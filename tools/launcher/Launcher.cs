@@ -36,19 +36,23 @@ namespace Cerebrum
     /// launcher and the thing it launches are visibly the same product.
     static class Palette
     {
-        public static readonly Color Bg = FromHex("#020617");       // slate-950
-        public static readonly Color Surface = FromHex("#0f172a");  // slate-900
-        public static readonly Color Sunken = FromHex("#0b1120");
-        public static readonly Color Border = FromHex("#1e293b");   // slate-800
-        public static readonly Color Text = FromHex("#f1f5f9");     // slate-100
-        public static readonly Color Muted = FromHex("#94a3b8");    // slate-400
-        public static readonly Color Subtle = FromHex("#64748b");   // slate-500
-        public static readonly Color Accent = FromHex("#38bdf8");   // blue-400
-        public static readonly Color AccentLift = FromHex("#7dd3fc");
-        public static readonly Color AccentDim = FromHex("#0369a1");
-        public static readonly Color Ok = FromHex("#4ade80");       // green-400
-        public static readonly Color Warn = FromHex("#fbbf24");     // amber-400
-        public static readonly Color Bad = FromHex("#f87171");      // red-400
+        public static readonly Color Bg = FromHex("#07060c");       // obsidian-950
+        public static readonly Color Surface = FromHex("#0d0b15");  // obsidian-900
+        public static readonly Color Sunken = FromHex("#110e1b");   // obsidian-850
+        public static readonly Color Border = FromHex("#1a1626");   // obsidian-800
+        public static readonly Color Text = FromHex("#ebe6f0");     // obsidian-100
+        public static readonly Color Muted = FromHex("#b3a9c4");    // obsidian-300
+        public static readonly Color Subtle = FromHex("#8a7fa0");   // obsidian-400
+        public static readonly Color Accent = FromHex("#c084fc");   // vibranium-400
+        public static readonly Color AccentLift = FromHex("#d8b4fe");
+        public static readonly Color AccentDim = FromHex("#7e22ce");
+        // Chrome only, exactly as in the console: gold never reports a
+        // state. Warn below is orange rather than amber for that reason -
+        // a gold rule and an amber warning must never be confused.
+        public static readonly Color Gold = FromHex("#e8c67e");     // gold-300
+        public static readonly Color Ok = FromHex("#4ade80");       // jade-400
+        public static readonly Color Warn = FromHex("#fb923c");     // ember-400
+        public static readonly Color Bad = FromHex("#fb7185");      // rose-400
 
         public static Color FromHex(string hex)
         {
@@ -128,6 +132,13 @@ namespace Cerebrum
             using (LinearGradientBrush b =
                        new LinearGradientBrush(r, Palette.Accent, Palette.AccentDim, 55f))
                 g.FillPath(b, p);
+            // The gold hairline just inside the tile, the same chrome the
+            // console wears and the same one build.ps1 etches into the ICO.
+            Rectangle inner = Rectangle.Inflate(r, -(int)(r.Width * 0.085f),
+                                                   -(int)(r.Width * 0.085f));
+            using (GraphicsPath p = Rounded(inner, Math.Max(2, inner.Width / 5)))
+            using (Pen gold = new Pen(Color.FromArgb(150, Palette.Gold)))
+                g.DrawPath(gold, p);
             using (Font f = Fonts.Sans(r.Height * 0.52f, FontStyle.Bold))
             using (StringFormat sf = new StringFormat())
             {
@@ -549,6 +560,17 @@ namespace Cerebrum
 
             using (Pen p = new Pen(Palette.Border))
                 g.DrawLine(p, 0, header.Height - 1, header.Width, header.Height - 1);
+
+            // And a gold hairline over the top of it, running out before it
+            // reaches the far edge. Chrome, identical on every run - it is
+            // never allowed to report a state, which is exactly why the
+            // status pill beside it uses orange for warnings and not amber.
+            using (LinearGradientBrush gold = new LinearGradientBrush(
+                       new Rectangle(0, 0, Math.Max(1, header.Width / 2), 1),
+                       Color.FromArgb(120, Palette.Gold), Color.FromArgb(0, Palette.Gold),
+                       LinearGradientMode.Horizontal))
+            using (Pen gp = new Pen(gold))
+                g.DrawLine(gp, 0, header.Height - 1, header.Width / 2, header.Height - 1);
         }
 
         void SetStatus(string text, Color tone)

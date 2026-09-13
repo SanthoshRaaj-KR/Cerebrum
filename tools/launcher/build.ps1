@@ -58,10 +58,34 @@ function New-Tile([int]$size) {
         $path.CloseFigure()
 
         $rect = New-Object System.Drawing.Rectangle($pad, $pad, $side, $side)
-        $from = [System.Drawing.ColorTranslator]::FromHtml('#38bdf8')   # blue-400
-        $to = [System.Drawing.ColorTranslator]::FromHtml('#0369a1')     # blue-700
+        $from = [System.Drawing.ColorTranslator]::FromHtml('#c084fc')   # vibranium-400
+        $to = [System.Drawing.ColorTranslator]::FromHtml('#6d28d9')     # vibranium-800
         $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect, $from, $to, 55.0)
         $g.FillPath($brush, $path)
+
+        # A gold hairline just inside the tile, the same chrome the console
+        # uses. Skipped at 16 and 32px: at that size it lands on the same
+        # pixel as the edge and only muddies it.
+        if ($size -ge 48) {
+            $inset = [Math]::Max(2, [int]($size * 0.085))
+            $ir = $radius - [int]($inset * 0.6)
+            if ($ir -lt 2) { $ir = 2 }
+            $id = $ir * 2
+            $x = $pad + $inset
+            $y = $pad + $inset
+            $w = $side - 2 * $inset
+            $inner = New-Object System.Drawing.Drawing2D.GraphicsPath
+            $inner.AddArc($x, $y, $id, $id, 180, 90)
+            $inner.AddArc($x + $w - $id, $y, $id, $id, 270, 90)
+            $inner.AddArc($x + $w - $id, $y + $w - $id, $id, $id, 0, 90)
+            $inner.AddArc($x, $y + $w - $id, $id, $id, 90, 90)
+            $inner.CloseFigure()
+            $goldPen = New-Object System.Drawing.Pen(
+                [System.Drawing.Color]::FromArgb(150, 232, 198, 126),
+                [Math]::Max(1.0, $size * 0.012))
+            $g.DrawPath($goldPen, $inner)
+            $goldPen.Dispose(); $inner.Dispose()
+        }
 
         $fontSize = $size * 0.56
         $font = New-Object System.Drawing.Font('Segoe UI', $fontSize, [System.Drawing.FontStyle]::Bold,
