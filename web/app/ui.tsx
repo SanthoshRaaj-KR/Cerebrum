@@ -117,8 +117,15 @@ export function Meter({
  */
 const THEME_EVENT = "cerebrum-theme";
 
+/* Both of these mirror tokens.css exactly, and the query is
+   `prefers-color-scheme: light` rather than `dark` on purpose. Obsidian is
+   the base and day is the branch, so the only thing that turns the console
+   light is the system actively asking for light. Querying for dark instead
+   would disagree with the stylesheet for anyone whose browser reports no
+   preference at all: the page would be obsidian and the glyph would claim
+   it was day. */
 function subscribe(onChange: () => void) {
-  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  const media = window.matchMedia("(prefers-color-scheme: light)");
   media.addEventListener("change", onChange);
   window.addEventListener(THEME_EVENT, onChange);
   return () => {
@@ -130,16 +137,17 @@ function subscribe(onChange: () => void) {
 function currentTheme(): "light" | "dark" {
   const set = document.documentElement.dataset.theme;
   if (set === "light" || set === "dark") return set;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+  return window.matchMedia("(prefers-color-scheme: light)").matches
+    ? "light"
+    : "dark";
 }
 
 export function ThemeToggle() {
   // The server has no way to know the viewer's preference, so it renders
-  // the light-mode glyph; the inline script has already set the real theme
-  // by the time this hydrates.
-  const theme = useSyncExternalStore(subscribe, currentTheme, () => "light" as const);
+  // the glyph for obsidian - the default identity, and therefore the one
+  // most likely to be right. The inline script has already set the real
+  // theme by the time this hydrates.
+  const theme = useSyncExternalStore(subscribe, currentTheme, () => "dark" as const);
 
   function flip() {
     const next = theme === "dark" ? "light" : "dark";
@@ -243,15 +251,26 @@ export function GlassCard({
   className,
   solid,
   glow,
+  etched,
 }: {
   children: React.ReactNode;
   className?: string;
   solid?: boolean;
   glow?: boolean;
+  /** Gold corner brackets. For a panel that is the point of its screen -
+   * the verdict, the hero, the progress header. Put it on everything and
+   * it stops meaning anything, which is also true of `glow`. */
+  etched?: boolean;
 }) {
   return (
     <div
-      className={[s.glass, solid ? s.glassSolid : "", glow ? s.glassGlow : "", className]
+      className={[
+        s.glass,
+        solid ? s.glassSolid : "",
+        glow ? s.glassGlow : "",
+        etched ? s.etched : "",
+        className,
+      ]
         .filter(Boolean)
         .join(" ")}
     >

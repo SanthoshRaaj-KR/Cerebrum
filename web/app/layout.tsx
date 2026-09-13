@@ -34,10 +34,11 @@ export const metadata: Metadata = {
 
 /* Applies a remembered theme before first paint.
  *
- * Without it the page renders in light, then the toggle hydrates and
- * switches it - a white flash straight in the face of anyone who chose
- * dark. It has to be inline and it has to be synchronous in <head>, which
- * is the one thing a React effect cannot be.
+ * Without it the page renders in whatever the stylesheet defaults to, then
+ * the toggle hydrates and switches it - a flash of the wrong theme straight
+ * in the face of anyone who chose the other one. It has to be inline and it
+ * has to be synchronous in <head>, which is the one thing a React effect
+ * cannot be.
  *
  * Reading storage is wrapped because it throws outright in some contexts
  * rather than returning null, and a theme preference is not worth a blank
