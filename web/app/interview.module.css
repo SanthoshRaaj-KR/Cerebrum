@@ -89,11 +89,21 @@
   color: var(--text-subtle);
 }
 
+/* The same typographic voice as every section eyebrow - mono, uppercase,
+   the same 0.16em tracking - but deliberately NOT gold, which is the one
+   place in the console that rule is broken on purpose.
+
+   Gold is how this theme says "look here". This label sits directly above
+   the question someone is being asked, which is the single spot on the
+   whole screen where nothing is allowed to compete for attention. Matching
+   the tracking keeps it recognisably part of the same system; keeping the
+   colour subtle keeps it out of the way of the only thing that matters
+   here. */
 .who {
   font-family: var(--font-mono), monospace;
   font-size: var(--text-xs);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.16em;
   color: var(--text-subtle);
 }
 
