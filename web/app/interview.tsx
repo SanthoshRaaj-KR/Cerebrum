@@ -24,7 +24,13 @@
  * finishes instantly on a click, and under reduced motion it never runs.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { SessionState } from "@/lib/api";
 import * as speech from "@/lib/speech";
@@ -97,29 +103,6 @@ function Typewriter({ text, instant }: { text: string; instant?: boolean }) {
   );
 }
 
-/**
- * Whether questions are read aloud, remembered between sessions.
- *
- * Stored rather than defaulted every time because this is a preference
- * about a room, not about a screen: someone practising on a train wants
- * it off and will want it off tomorrow too. Reads are wrapped because
- * localStorage throws outright in some contexts rather than returning
- * null, and a muted interview is not worth a blank page.
- *
- * Default ON. The point of the feature is to hear the question, and a
- * feature that has to be discovered before it does anything is a feature
- * most people never meet.
- */
-const VOICE_KEY = "cerebrum-voice";
-
-function storedVoice(): boolean {
-  try {
-    return localStorage.getItem(VOICE_KEY) !== "off";
-  } catch {
-    return true;
-  }
-}
-
 function SpeakToggle({
   on,
   onChange,
@@ -183,21 +166,21 @@ export function InterviewScreen({
   const endRef = useRef<HTMLDivElement | null>(null);
 
   // -- the voice ----------------------------------------------------------
-  const [voiceOn, setVoiceOn] = useState(true);
+  // The preference lives in lib/speech.ts, not in React, for the same
+  // reason the theme lives on <html data-theme>: the server renders this
+  // screen and cannot know the stored value, so reading it into state
+  // inside an effect would render the wrong glyph and then correct itself.
+  const voiceOn = useSyncExternalStore(
+    speech.subscribeVoice,
+    speech.voicePref,
+    speech.voicePrefServer,
+  );
   const [speaking, setSpeaking] = useState(false);
   // The question the voice has already read. Without it, every unrelated
   // re-render of this screen - a keystroke in the answer box - would start
   // the question again from the top.
   const spoken = useRef<string | null>(null);
   const liveQuestion = awaiting ? (current?.question ?? null) : null;
-
-  // Read the stored preference once, on the client. It cannot be the
-  // initial state because the server renders this too and has no access to
-  // localStorage; doing it here costs one extra render on mount and keeps
-  // the markup identical on both sides.
-  useEffect(() => {
-    setVoiceOn(storedVoice());
-  }, []);
 
   const say = useCallback(
     (text: string) => {
@@ -218,30 +201,23 @@ export function InterviewScreen({
     say(liveQuestion);
   }, [voiceOn, liveQuestion, say]);
 
-  // Muting stops mid-sentence. A mute button that lets the current
-  // sentence finish is a button that does not work.
-  useEffect(() => {
-    if (!voiceOn) {
-      speech.stop();
-      setSpeaking(false);
-    }
-  }, [voiceOn]);
-
   // Leaving the interview takes the voice and the cached audio with it.
   useEffect(() => () => speech.reset(), []);
 
   function flipVoice(next: boolean) {
-    setVoiceOn(next);
-    try {
-      localStorage.setItem(VOICE_KEY, next ? "on" : "off");
-    } catch {
-      // Not being able to remember the choice is no reason to refuse it.
-    }
-    // Turning it on mid-question reads the one on screen now, rather than
-    // waiting silently for the next.
-    if (next && liveQuestion) {
-      spoken.current = liveQuestion;
-      say(liveQuestion);
+    speech.setVoicePref(next);
+    if (next) {
+      // Turning it on mid-question reads the one on screen now, rather
+      // than waiting silently for the next.
+      if (liveQuestion) {
+        spoken.current = liveQuestion;
+        say(liveQuestion);
+      }
+    } else {
+      // Muting stops mid-sentence. A mute button that lets the current
+      // sentence finish is a button that does not work.
+      speech.stop();
+      setSpeaking(false);
     }
   }
 

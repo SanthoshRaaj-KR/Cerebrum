@@ -29,7 +29,6 @@ const BRIDGE = process.env.NEXT_PUBLIC_BRIDGE ?? "http://127.0.0.1:7332";
 const cache = new Map<string, string>();
 
 let current: HTMLAudioElement | null = null;
-let currentUtterance: SpeechSynthesisUtterance | null = null;
 
 export type SpeechEnd = () => void;
 
@@ -43,7 +42,6 @@ export function stop() {
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
-  currentUtterance = null;
 }
 
 /** Frees the cached audio. Called when an interview ends. */
@@ -93,15 +91,8 @@ function browserSpeak(text: string, onEnd?: SpeechEnd): boolean {
     // faster than someone can follow while also thinking about an answer.
     u.rate = 0.95;
     u.pitch = 1;
-    u.onend = () => {
-      currentUtterance = null;
-      onEnd?.();
-    };
-    u.onerror = () => {
-      currentUtterance = null;
-      onEnd?.();
-    };
-    currentUtterance = u;
+    u.onend = () => onEnd?.();
+    u.onerror = () => onEnd?.();
     window.speechSynthesis.speak(u);
     return true;
   } catch {
@@ -174,4 +165,57 @@ export async function speak(
  * whether the toggle is worth showing. */
 export function supported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
+}
+
+/* -- the preference ---------------------------------------------------------
+ *
+ * Whether questions are read aloud, remembered between sessions. Stored
+ * rather than defaulted every time because this is a preference about a
+ * room, not about a screen: someone practising on a train wants it off,
+ * and will want it off tomorrow too.
+ *
+ * It lives here as a tiny external store rather than as React state for
+ * the same reason the theme does. The server renders this screen too and
+ * cannot know the stored value, so reading it into state inside an effect
+ * would render once with the wrong icon and then correct itself - a
+ * cascading render, and a visible flicker on the glyph.
+ * useSyncExternalStore exists for exactly this shape.
+ *
+ * Default on. The point of the feature is to hear the question, and a
+ * feature that has to be discovered before it does anything is one most
+ * people never meet.
+ */
+const VOICE_KEY = "cerebrum-voice";
+const listeners = new Set<() => void>();
+
+export function subscribeVoice(onChange: () => void) {
+  listeners.add(onChange);
+  return () => {
+    listeners.delete(onChange);
+  };
+}
+
+export function voicePref(): boolean {
+  try {
+    return localStorage.getItem(VOICE_KEY) !== "off";
+  } catch {
+    // Storage throws outright in some contexts rather than returning
+    // null, and a muted interview is not worth a blank page.
+    return true;
+  }
+}
+
+/** What the server renders. Matches the default so the common case
+ * hydrates without a flicker. */
+export function voicePrefServer(): boolean {
+  return true;
+}
+
+export function setVoicePref(on: boolean) {
+  try {
+    localStorage.setItem(VOICE_KEY, on ? "on" : "off");
+  } catch {
+    // Not being able to remember the choice is no reason to refuse it.
+  }
+  for (const fn of listeners) fn();
 }
