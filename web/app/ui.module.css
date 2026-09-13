@@ -337,6 +337,46 @@ p.eyebrow::after {
   box-shadow: var(--glow-accent);
 }
 
+/* -- corner etching -------------------------------------------------------
+   Two gold brackets, top-left and bottom-right, inset just inside a
+   panel's own border. It is the single cheapest thing that makes a
+   rectangle read as machined rather than drawn, and it is why this theme
+   does not have to rely on colour alone to carry its identity.
+
+   Diagonally opposed rather than on all four corners: four brackets close
+   the panel into a frame and the content starts to feel contained.
+
+   Reserved for panels that are the point of their screen - the verdict,
+   the hero, the library's progress header. Applied everywhere it would
+   stop meaning anything, which is the same reason the glow is not.
+
+   aria-hidden by construction: these are ::before/::after with no content,
+   so no screen reader ever meets them. */
+.etched::before,
+.etched::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+.etched::before {
+  top: 5px;
+  left: 5px;
+  border-top: 1px solid var(--gold-line);
+  border-left: 1px solid var(--gold-line);
+  border-top-left-radius: var(--radius-sm);
+}
+
+.etched::after {
+  right: 5px;
+  bottom: 5px;
+  border-right: 1px solid var(--gold-line);
+  border-bottom: 1px solid var(--gold-line);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
 /* -- toast ---------------------------------------------------------------- */
 
 .toastWrap {

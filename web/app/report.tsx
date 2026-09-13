@@ -313,7 +313,7 @@ function Verdict({
 }) {
   const { card } = view;
   return (
-    <GlassCard className={s.verdictCard} glow>
+    <GlassCard className={s.verdictCard} glow etched>
       <div className={s.verdictGrid}>
         <div className={s.ringWrap}>
           <ScoreRing score={card.score} tone={VERDICT_TONE[card.verdict]} />
