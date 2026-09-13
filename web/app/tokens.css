@@ -180,8 +180,8 @@
   --border-strong: var(--obsidian-700);
 
   --text: #f6f3f9;
-  --text-muted: var(--obsidian-300);
-  --text-subtle: var(--obsidian-400);
+  --text-muted: var(--obsidian-200);
+  --text-subtle: #9c93b0;
   --text-inverse: var(--obsidian-950);
 
   --accent: var(--vibranium-400);
@@ -243,18 +243,23 @@
   --mesh-opacity: 1;
 
   /* Concentric rings radiating from a point above the masthead. One pixel
-     each, spaced by --ring-gap, fading out with distance. */
-  --ring: rgba(168, 85, 247, 0.21);
+     each, spaced by --ring-gap, fading out with distance.
+
+     Halved from where this started. The ground is looked at for a second
+     and then read through for twenty minutes, and texture that is
+     pleasant on arrival becomes something the eye keeps re-finding
+     behind a paragraph. It should be noticed once and then not again. */
+  --ring: rgba(168, 85, 247, 0.11);
   --ring-gap: 54px;
 
   /* The etched triangular lattice. Texture, not pattern: at the point
      where you can count the triangles it is too strong. */
-  --weave: rgba(232, 198, 126, 0.095);
+  --weave: rgba(232, 198, 126, 0.05);
   --weave-size: 46px;
 
   /* Charged points sitting on the lattice. */
-  --node: rgba(216, 180, 254, 0.85);
-  --node-glow: rgba(168, 85, 247, 0.55);
+  --node: rgba(216, 180, 254, 0.6);
+  --node-glow: rgba(168, 85, 247, 0.32);
 
   --vignette: rgba(2, 1, 4, 0.82);
 
@@ -322,12 +327,12 @@
     --horizon: rgba(202, 191, 174, 0.34);
     --mesh-opacity: 1;
 
-    --ring: rgba(109, 40, 217, 0.09);
+    --ring: rgba(109, 40, 217, 0.05);
     --ring-gap: 54px;
 
-    --weave: rgba(138, 100, 19, 0.07);
+    --weave: rgba(138, 100, 19, 0.04);
 
-    --node: rgba(109, 40, 217, 0.5);
+    --node: rgba(109, 40, 217, 0.35);
     --node-glow: rgba(109, 40, 217, 0.22);
 
     --vignette: rgba(138, 100, 19, 0.06);
@@ -387,12 +392,12 @@
   --horizon: rgba(202, 191, 174, 0.34);
   --mesh-opacity: 1;
 
-  --ring: rgba(109, 40, 217, 0.09);
+  --ring: rgba(109, 40, 217, 0.05);
   --ring-gap: 54px;
 
-  --weave: rgba(138, 100, 19, 0.07);
+  --weave: rgba(138, 100, 19, 0.04);
 
-  --node: rgba(109, 40, 217, 0.5);
+  --node: rgba(109, 40, 217, 0.35);
   --node-glow: rgba(109, 40, 217, 0.22);
 
   --vignette: rgba(138, 100, 19, 0.06);
