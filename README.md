@@ -363,26 +363,51 @@ the way a hand-drawn one would. It shows the machinery and none of the
 judgements: which agents run is fine to see mid-interview, how any given
 answer was read is not.
 
-It is built to be looked at, not just read. An ambient gradient field
-behind every screen, glass panels over it, the score as an animated ring
-with the number inside it, the competencies as a radar beside the table
-that carries the actual reading, and the questions on a timeline rail
-rather than as a stack of detached cards. The live question types itself
-in at reading pace — click to skip it.
+It is built to be looked at, not just read. Obsidian, vibranium and gold:
+a black ground with a violet undertone, one accent that carries every
+deliberate action, and gold for chrome and nothing else. The score is an
+animated ring with the number inside it, the competencies a radar beside
+the table that carries the actual reading, and the questions sit on a
+timeline rail rather than as a stack of detached cards. The live question
+types itself in at reading pace — click to skip it.
+
+**Nothing behind the console is a gradient patch.** Every coloured thing
+in the background is a one-pixel line or a two-pixel point: a horizon, a
+set of concentric hairlines radiating from above the masthead, a
+triangular lattice etched full-bleed across the page, and nine points of
+charge breathing out of phase. The field between them is obsidian and
+stays obsidian. There is no blur filter anywhere, which also makes it the
+cheapest that layer has ever been.
+
+**Gold is never a status colour.** It names sections, rules and corner
+brackets, and it never appears on anything evaluative — pale gold and
+amber are close enough to be confused, so "developing" moved onto a
+saturated orange and gold was kept off every surface a verdict can reach.
+You should never have to work out whether a gold thing is telling you
+something went badly.
 
 None of that is allowed to say anything. The coverage constellation in the
 interview bar uses exactly one colour: a node is lit or it is not. A
 second colour would come to mean *and it went well*, and the whole
 judge/speak split exists so that opinion cannot reach you mid-interview.
 
+There is one deliberate exception to all of it. Every section label in the
+console is gold; the interviewer label on the live screen is not. Gold is
+how this theme says *look here*, and that label sits directly above the
+question you are being asked.
+
 Motion is defined once, in `web/app/motion.ts`, and honoured once —
 `<MotionConfig reducedMotion="user">` at the root, so
 `prefers-reduced-motion` turns every transform into an opacity change and
-leaves the layout alone. Charts render at their final state; the ambient
-field stops drifting but stays, because depth is not motion.
+leaves the layout alone. Charts render at their final state; the charge in
+the background settles but the lattice stays, because structure is not
+motion.
 
-Both themes, light by default, remembered per browser and applied before
-first paint. Everything reads down to 375px, with the radar and the
+Both themes, obsidian by default, remembered per browser and applied
+before first paint. Day is not an inversion of it — bone and ink with a
+deep violet and an antique gold, contrast verified on its own surfaces,
+because the report is long-form reading and daylight deserves a design
+rather than a courtesy. Everything reads down to 375px, with the radar and the
 constellation dropped on narrow screens — both are the impressionistic
 read, and the list beside each one names every area in full. Nothing is authenticated — the
 bridge binds to `127.0.0.1` only, the same posture as any single-user local
