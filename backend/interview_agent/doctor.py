@@ -5,8 +5,11 @@
 Validates the API keys (the LLM provider, Deepgram for dictation, and
 the role-research search providers) against the real services, so a bad
 key surfaces here rather than as a dead mic or an ungrounded set of
-questions mid-session. There is no TTS check: the interviewer never
-speaks, so there is no voice to validate.
+questions mid-session.
+
+The Deepgram key is checked twice, once per direction: it hears spoken
+answers and it reads the questions aloud. Those are separate
+entitlements and they can fail independently.
 """
 
 from __future__ import annotations
@@ -135,7 +138,7 @@ def check_llm() -> None:
 
 
 def check_deepgram() -> None:
-    print("\nDeepgram (hears your spoken answers)")
+    print("\nDeepgram (hears you speak)")
     try:
         r = httpx.get(
             "https://api.deepgram.com/v1/projects",
@@ -259,6 +262,55 @@ def _check_brave_key() -> bool:
     return False
 
 
+def check_speech() -> None:
+    """Reading questions aloud.
+
+    Optional in the sense that nothing breaks without it - the browser
+    falls back to its own voice - so an absent key is a warning. A key
+    that is present and rejected is a real failure: the fallback is
+    noticeably worse, and someone who configured this is expecting the
+    good voice rather than the one their laptop came with.
+    """
+    print("\nSpoken questions (optional)")
+    if not bool(settings.tts.get("enabled", True)):
+        print(f"{WARN} voice.tts.enabled is false - the browser voice will be used")
+        return
+    if not settings.deepgram_api_key:
+        print(f"{WARN} no DEEPGRAM_API_KEY - the browser's own voice will be used")
+        return
+
+    try:
+        r = httpx.post(
+            "https://api.deepgram.com/v1/speak",
+            params={"model": settings.tts_model, "encoding": "mp3"},
+            headers={
+                "Authorization": f"Token {settings.deepgram_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={"text": "Ready."},
+            timeout=20.0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"{BAD} could not reach Deepgram for speech: {exc}")
+        _fail("speech unreachable")
+        return
+
+    if r.status_code == 200 and r.content:
+        print(f"{OK} {settings.tts_model} synthesised {len(r.content)} bytes")
+        return
+    if r.status_code in (401, 403):
+        print(f"{BAD} key rejected for speech - check DEEPGRAM_API_KEY")
+        _fail("speech key rejected")
+    elif r.status_code in (402, 429):
+        print(f"{BAD} out of speech quota - check console.deepgram.com")
+        _fail("speech out of quota")
+    elif r.status_code == 400:
+        print(f"{BAD} model {settings.tts_model} was refused: {r.text[:120]}")
+        _fail(f"tts model {settings.tts_model} not usable")
+    else:
+        print(f"{WARN} unexpected response {r.status_code}: {r.text[:120]}")
+
+
 def check_storage() -> None:
     """Saved interviews. Entirely optional: no URI is a warning and a skip,
     the same way an absent Brave key is. A URI that is there but does not
@@ -342,6 +394,7 @@ def main(argv: list[str] | None = None) -> int:
     for check in (
         check_llm,
         check_deepgram,
+        check_speech,
         check_research,
         check_storage,
         check_web,
