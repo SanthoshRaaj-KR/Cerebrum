@@ -367,3 +367,98 @@ second colour would inevitably come to mean *and it went well*, and the
 whole judge/speak split exists so that opinion cannot reach the candidate
 mid-interview. Leaking it through a chart rather than a sentence would be
 worse, not better.
+
+---
+
+## Revision: obsidian, vibranium and gold
+
+The identity changed. Not the structure — three token layers, one
+superfamily, charts beside the facts they draw, the constellation still
+one colour — but the palette and the ground beneath it are new.
+
+Every colour in the console resolved through the semantic layer already,
+with no hex value in any component stylesheet, so the whole product
+changed identity by editing `tokens.css`. That is what the discipline was
+for, and it is the single strongest argument for keeping it.
+
+### Three colours, three jobs
+
+| | Job | Obsidian | Day |
+|---|---|---|---|
+| **Obsidian** | The ground. Black with a violet undertone, so the accent sits in the same family as the surface it lights rather than on top of it | `#07060C` → `#EBE6F0` | — |
+| **Bone / ink** | The day ground. Warm paper, not white — white under a violet accent goes cold and clinical | — | `#F7F4EF` / `#1A1420` |
+| **Vibranium** | Every deliberate action, and the only thing allowed to glow | `#C084FC` | `#6D28D9` |
+| **Gold** | Chrome. Eyebrows, rules, corner etching, the launcher's sigil | `#E8C67E` | `#8A6413` |
+
+**Gold is never a status colour and never appears on anything
+evaluative.** This is load-bearing rather than stylistic. Pale gold and
+amber sit close enough to be confused, so `warn` moved off amber onto a
+saturated orange (`#FB923C` / `#B45309`) and gold is kept off every
+surface a verdict can reach. Nobody should have to work out whether a gold
+thing is telling them something went badly — it never is.
+
+The revised status set, each verified on its own surface:
+
+| Meaning | Day | Obsidian |
+|---|---|---|
+| Solid / correct | `#15803D` | `#4ADE80` |
+| Developing / partial | `#B45309` | `#FB923C` |
+| Not shown / incorrect | `#BE123C` | `#FB7185` |
+| Informational | `#6D28D9` | `#C084FC` |
+
+### Obsidian is the default; day is a real design
+
+Reversed from the first build. The identity is a dark one and the console
+should arrive looking like itself, including for a viewer whose browser
+reports no preference — so obsidian lives on bare `:root` and day is the
+branch. `ThemeToggle` queries `prefers-color-scheme: light` for exactly
+that reason; querying for dark would disagree with the stylesheet for
+anyone reporting no preference.
+
+Day is not an inversion. Bone and ink with a deep violet and an antique
+gold, contrast verified on its own surfaces, because the report is still
+long-form reading. Bright gold on bone is about 1.6:1, so day takes the
+dark end of the gold ramp and keeps the same job.
+
+### The ground has no gradient patches in it
+
+The first version of this revision used blurred radial blobs, and it
+looked like every other dark theme: purple fog with text floating on it.
+The rule now is explicit — **every coloured thing in the background is a
+one-pixel line or a two-pixel point.** The field between them is obsidian
+and stays obsidian.
+
+| Layer | What it is |
+|---|---|
+| `horizon` | The only large area carrying a value, and it is a neutral: the top sits a shade above the bottom |
+| `rings` | Concentric hairlines radiating from above the masthead. The hard 1px stop matters — a soft ring is a glow, and a glow at that scale is the patch this avoids |
+| `weave` | The triangular lattice: three families of hairlines at 0/60/120°, which is what a triangular grid *is*. Full-bleed, because architecture that stops at the edge of the reading column is decoration pretending to be structure |
+| `nodes` | Nine points of charge breathing out of phase over 11–19s, placed toward the edges because the middle is where the reading is |
+| `vignette` | Closes the frame so the light sits where the reading is |
+
+No blur filter anywhere, which also makes it the cheapest this layer has
+ever been: four gradients and nine 3px dots animating `opacity`.
+
+The same problem recurs at panel scale, hence `--glow-rim`: a bloom that
+reads as feedback under a button becomes a coloured patch under something
+the size of the verdict block, so large surfaces get a lit edge instead.
+
+### Etching
+
+Radii drop to 2/4/6 — the identity is cut, and a 10px radius reads as
+moulded next to a triangular lattice. Not to zero, because a true 0 makes
+glass edges look like a rendering fault at a non-integer DPR.
+
+Panels that are the point of their screen get two gold corner brackets,
+top-left and bottom-right. Diagonally opposed, never four: four brackets
+close a panel into a frame and the content starts to feel contained. Both
+are empty `::before`/`::after`, so nothing is conveyed by them that is not
+also in the text.
+
+### The exception that proves the gold rule
+
+Every section eyebrow is mono, uppercase, 0.16em and gold. The
+interviewer label on the live interview screen matches all of it except
+the colour. Gold is how this theme says *look here*, and that label sits
+directly above the question someone is being asked — the one place in the
+product where nothing may compete for attention.
