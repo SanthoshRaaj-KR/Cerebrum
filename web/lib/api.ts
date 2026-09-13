@@ -40,6 +40,10 @@ export type SystemInfo = {
    * it just means no MONGODB_URI in .env - so the console explains it
    * rather than hiding the feature or letting the button fail. */
   storageEnabled: boolean;
+  /** Whether the bridge can synthesise a question with the good voice.
+   * False is also a normal state - the browser has its own voice to fall
+   * back on, so the toggle stays useful either way. */
+  speechEnabled: boolean;
   modes: Mode[];
 };
 
