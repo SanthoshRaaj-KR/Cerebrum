@@ -105,6 +105,7 @@ p.eyebrow::after {
   transition:
     background-color var(--dur) var(--ease),
     border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease),
     color var(--dur) var(--ease);
 }
 
@@ -113,8 +114,12 @@ p.eyebrow::after {
   color: var(--accent-text);
 }
 
+/* The one place in the console that blooms. A primary action is the thing
+   the screen is for, and vibranium is the only colour allowed to glow -
+   which is what keeps the glow meaningful rather than ambient. */
 .btnPrimary:hover:not(:disabled) {
   background: var(--accent-hover);
+  box-shadow: var(--glow-accent);
 }
 
 .btnSecondary {
