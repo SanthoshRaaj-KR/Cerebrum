@@ -228,17 +228,17 @@
      third stop the whole ground goes monochrome purple, which is the
      failure mode of every dark theme that has ever been described as
      "cyberpunk". */
-  --mesh-1: rgba(168, 85, 247, 0.26);
-  --mesh-2: rgba(109, 40, 217, 0.3);
-  --mesh-3: rgba(217, 164, 65, 0.1);
+  --mesh-1: rgba(168, 85, 247, 0.17);
+  --mesh-2: rgba(109, 40, 217, 0.19);
+  --mesh-3: rgba(217, 164, 65, 0.09);
   --mesh-opacity: 1;
 
   /* The etched lattice over the ambient field, and how far into the page
      it reaches before fading out. Texture, not pattern: at the point
      where you can count the triangles it is too strong. */
-  --weave: rgba(232, 198, 126, 0.07);
+  --weave: rgba(232, 198, 126, 0.085);
   --weave-size: 46px;
-  --vignette: rgba(3, 2, 6, 0.55);
+  --vignette: rgba(2, 1, 4, 0.78);
 
   /* The rail a timeline or stepper is drawn on. */
   --rail: var(--obsidian-800);
