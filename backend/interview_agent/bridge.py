@@ -18,6 +18,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCRequest,
@@ -29,6 +30,7 @@ from interview_agent import interviewer as interviewer_mod
 from interview_agent import pipeline as pipeline_mod
 from interview_agent import profile as profile_mod
 from interview_agent import prompts
+from interview_agent import speech as speech_mod
 from interview_agent import store as store_mod
 from interview_agent.config import settings
 from interview_agent.context import CandidateContext
@@ -65,6 +67,10 @@ def system_info() -> dict[str, Any]:
         # False is a normal state, not a broken one - it just means no
         # MONGODB_URI in .env.
         "storageEnabled": store_mod.available(),
+        # Whether the console should offer to read questions aloud. False
+        # is not broken either - the browser has its own voice to fall
+        # back on, so the toggle stays useful regardless.
+        "speechEnabled": speech_mod.available(),
         "modes": [
             {
                 "key": m.key,
@@ -254,6 +260,49 @@ async def session_report() -> dict:
     state = _session_state(_session)
     state["scorecard"] = _session.scorecard.to_dict()
     return state
+
+
+@app.post("/api/speak")
+async def speak(payload: dict) -> Response:
+    """Read one of this session's questions aloud.
+
+    The text is checked against the questions the session has actually
+    asked before anything is synthesised, and that check is the whole
+    point of the endpoint rather than a nicety. "Say this out loud" is
+    precisely the shape of request that could otherwise be used to read
+    back something the candidate was never meant to hear - a private
+    per-turn note, the crib sheet - so it does not accept arbitrary text.
+    It speaks words already on their screen or it speaks nothing.
+
+    A failure here is a 503 and never an exception the console has to
+    handle specially: the browser falls back to its own voice, which is
+    worse but always available.
+    """
+    text = str(payload.get("text", "")).strip()
+    if not text:
+        raise HTTPException(400, "nothing to say")
+    if _session is None:
+        raise HTTPException(400, "no active interview session")
+
+    asked = {t.question.strip() for t in _session.turns if t.question}
+    if text not in asked:
+        raise HTTPException(403, "that is not a question from this interview")
+
+    if not speech_mod.available():
+        raise HTTPException(503, "speech is not configured")
+
+    try:
+        audio = await speech_mod.synthesize(text)
+    except speech_mod.SpeechError as exc:
+        raise HTTPException(503, str(exc)) from None
+
+    return Response(
+        content=audio,
+        media_type="audio/mpeg",
+        # The same question is re-read when someone presses replay, and
+        # re-synthesising it would be a second charge for the same bytes.
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 @app.post("/api/session/reset")
