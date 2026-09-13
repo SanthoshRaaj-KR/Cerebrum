@@ -37,6 +37,7 @@
 }
 
 .stat {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -46,6 +47,21 @@
   background: var(--glass);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
+  overflow: hidden;
+}
+
+/* A gold hairline capping each tile, brightest at the left and running
+   out before the right edge. Chrome, and only chrome: it is identical on
+   every tile, so it can never be read as saying something about the
+   number underneath it. */
+.stat::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold-line), transparent);
 }
 
 .statValue {

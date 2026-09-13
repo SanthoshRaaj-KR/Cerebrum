@@ -14,11 +14,37 @@
   flex: none;
 }
 
+/* The wordmark is set in the text colour, not the accent. A product name
+   rendered in the same colour as its primary button teaches people that
+   the colour means "brand" rather than "this is the thing to press", and
+   the accent has exactly one job here. The identity is carried by the
+   gold rule beneath it instead. */
 .wordmark {
+  position: relative;
+  display: inline-block;
   font-size: var(--text-3xl);
   font-weight: var(--weight-bold);
   letter-spacing: -0.03em;
   line-height: var(--leading-tight);
+  padding-bottom: var(--space-2);
+}
+
+.wordmark::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  /* Gold into vibranium: the two halves of the palette, in the one place
+     they are allowed to touch. */
+  background: linear-gradient(
+    90deg,
+    var(--gold) 0%,
+    var(--accent) 55%,
+    transparent 100%
+  );
+  opacity: 0.85;
 }
 
 .tagline {

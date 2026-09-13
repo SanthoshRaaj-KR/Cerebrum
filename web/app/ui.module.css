@@ -28,6 +28,10 @@
 
 /* -- section headings ---------------------------------------------------- */
 
+/* Gold, and the widest tracking in the console. Eyebrows are the one place
+   the identity is allowed to speak for its own sake: they name a section,
+   they never carry a reading, and nothing evaluative is ever set in them -
+   which is precisely why gold is safe here and nowhere near a verdict. */
 .eyebrow {
   display: flex;
   align-items: center;
@@ -36,9 +40,25 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-subtle);
+  letter-spacing: 0.16em;
+  color: var(--gold);
   margin-bottom: var(--space-3);
+}
+
+/* The hairline that follows an eyebrow across the rest of the row. Fades
+   out rather than stopping, so it reads as an etched line running off the
+   panel instead of a border that ran out of ideas.
+
+   Scoped to `p` on purpose. Every standalone section label in the console
+   is a paragraph; the one eyebrow that is a div sits inline in the report's
+   masthead next to other controls, where a rule running off to the right
+   would read as a divider that means something. */
+p.eyebrow::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  min-width: var(--space-4);
+  background: linear-gradient(90deg, var(--gold-line), transparent);
 }
 
 .sectionTitle {
