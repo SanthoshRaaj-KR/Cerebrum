@@ -1,6 +1,8 @@
-/* The ambient field. See mesh.tsx for why it exists and why it is this
-   restrained. Everything here animates transform or opacity only - nothing
-   that can trigger layout or paint on a 60s loop. */
+/* The ground. See mesh.tsx for what it is and why it is built this way.
+
+   Everything that moves here animates opacity or transform only - nothing
+   that can trigger layout or paint on a slow loop. Everything that does
+   not move is a static gradient and costs nothing after first paint. */
 
 .mesh {
   position: fixed;
@@ -9,75 +11,50 @@
   overflow: hidden;
   pointer-events: none;
   opacity: var(--mesh-opacity);
-  /* The ground under the blobs. Without this the fixed layer is
-     transparent and the blobs sit on whatever the body happens to be. */
   background: var(--bg);
 }
 
-.blob {
+/* -- the horizon ----------------------------------------------------------
+   The one large-area value in the whole background, and it is a neutral.
+   The top of the page sits a shade above the bottom. That is a horizon; it
+   is not a colour patch, and nothing back here is allowed to become one. */
+.horizon {
   position: absolute;
-  border-radius: 50%;
-  /* The blur is what turns three circles into a field. It is expensive to
-     recompute, so it is set once and never animated - only the transform
-     underneath it moves. */
-  filter: blur(70px);
-  will-change: transform;
+  inset: 0;
+  background: linear-gradient(180deg, var(--horizon) 0%, transparent 62%);
 }
 
-.blobA {
-  width: 46vmax;
-  height: 46vmax;
-  top: -16vmax;
-  left: -10vmax;
-  background: radial-gradient(circle at 50% 50%, var(--mesh-1), transparent 70%);
-  animation: driftA 34s var(--ease) infinite alternate;
-}
+/* -- the rings ------------------------------------------------------------
+   Concentric hairlines radiating from a point above the masthead, the way
+   a reading spreads across a sand table. repeating-radial-gradient draws
+   the whole set in one declaration: transparent for --ring-gap, then
+   exactly one pixel of line.
 
-.blobB {
-  width: 38vmax;
-  height: 38vmax;
-  top: 8vmax;
-  right: -12vmax;
-  background: radial-gradient(circle at 50% 50%, var(--mesh-2), transparent 70%);
-  animation: driftB 41s var(--ease) infinite alternate;
-}
-
-.blobC {
-  width: 52vmax;
-  height: 52vmax;
-  bottom: -26vmax;
-  left: 22vmax;
-  background: radial-gradient(circle at 50% 50%, var(--mesh-3), transparent 72%);
-  animation: driftC 47s var(--ease) infinite alternate;
-}
-
-/* The hero variant: same field, more of it, and pulled to the top where
-   the masthead sits. */
-.meshHero .blobA {
-  width: 58vmax;
-  height: 58vmax;
-  top: -22vmax;
-}
-
-.meshHero .blobB {
-  width: 48vmax;
-  height: 48vmax;
-  top: -6vmax;
+   The hard 1px stop is the point. A soft ring is a glow, and a glow at
+   this scale is the gradient patch this layer exists to avoid. */
+.rings {
+  position: absolute;
+  inset: -10%;
+  background-image: repeating-radial-gradient(
+    circle at 50% 8%,
+    transparent 0 var(--ring-gap),
+    var(--ring) var(--ring-gap) calc(var(--ring-gap) + 1px)
+  );
+  /* Fades with distance, so the rings read as emanating from somewhere
+     rather than as a target printed over the page. */
+  -webkit-mask-image: radial-gradient(circle at 50% 8%, #000 0%, transparent 68%);
+  mask-image: radial-gradient(circle at 50% 8%, #000 0%, transparent 68%);
 }
 
 /* -- the weave ------------------------------------------------------------
-   A triangular lattice etched over the field: three sets of hairlines at
-   0, 60 and 120 degrees, which is the whole trick - three families of
-   parallel lines at sixty degrees to each other IS a triangular grid, and
-   it costs three gradients rather than a tiled image.
+   A triangular lattice: three families of hairlines at 0, 60 and 120
+   degrees to each other. That is the whole trick - three sets of parallel
+   lines at sixty degrees IS a triangular grid, and it costs three
+   gradients rather than a tiled image.
 
-   It is masked to be absent behind the middle of the page and present
-   toward the frame. That is the difference between texture and wallpaper:
-   the etching surrounds what you are reading instead of running underneath
-   it, and no line ever crosses a paragraph.
-
-   Deliberately not animated. The blobs move under it; the lattice is
-   architecture, and architecture that drifts is a distraction. */
+   Full-bleed and static. It is the architecture of the page; architecture
+   that drifts is a distraction, and one that stops at the edges of the
+   reading column is a decoration pretending to be structure. */
 .weave {
   position: absolute;
   inset: 0;
@@ -97,21 +74,64 @@
       var(--weave) 0 1px,
       transparent 1px calc(var(--weave-size) * 0.866)
     );
-  -webkit-mask-image: radial-gradient(
-    ellipse 68% 56% at 50% 42%,
-    transparent 30%,
-    #000 100%
-  );
-  mask-image: radial-gradient(
-    ellipse 68% 56% at 50% 42%,
-    transparent 30%,
-    #000 100%
-  );
 }
 
-/* Draws the edges of the frame down and lets the middle carry the light.
-   On obsidian it is a near-black; in day it is a barely-there warm wash,
-   because bone does not need darkening - it needs a horizon. */
+/* -- charged nodes --------------------------------------------------------
+   Points of charge sitting on the lattice, breathing at different phases.
+   Nine of them across the whole viewport: few enough that the eye finds
+   them rather than being led around by them, and slow enough (11-19s) that
+   nothing here ever competes with a question someone is answering.
+
+   They are placed toward the edges on purpose. The middle of the page is
+   where the reading is. */
+.node {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--node);
+  box-shadow: 0 0 9px 1px var(--node-glow);
+  opacity: 0.12;
+  animation: charge 14s var(--ease) infinite;
+  will-change: opacity;
+}
+
+.n1 { top: 14%; left: 7%;  animation-duration: 13s; animation-delay: -1s; }
+.n2 { top: 31%; left: 18%; animation-duration: 17s; animation-delay: -6s; }
+.n3 { top: 68%; left: 9%;  animation-duration: 11s; animation-delay: -3s; }
+.n4 { top: 86%; left: 24%; animation-duration: 19s; animation-delay: -9s; }
+.n5 { top: 9%;  left: 46%; animation-duration: 15s; animation-delay: -12s; }
+.n6 { top: 92%; left: 57%; animation-duration: 12s; animation-delay: -4s; }
+.n7 { top: 22%; left: 81%; animation-duration: 18s; animation-delay: -7s; }
+.n8 { top: 55%; left: 93%; animation-duration: 14s; animation-delay: -2s; }
+.n9 { top: 77%; left: 78%; animation-duration: 16s; animation-delay: -10s; }
+
+@keyframes charge {
+  0%,
+  100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* The hero variant. The same ground with the reading turned up a little -
+   for the rounds screen, the report's verdict and the library header,
+   where there is space for it and something worth framing. */
+.meshHero .rings {
+  --ring-gap: 46px;
+}
+
+.meshHero .node {
+  width: 4px;
+  height: 4px;
+}
+
+/* -- closing the frame ----------------------------------------------------
+   Draws the edges down so the light sits where the reading is. On obsidian
+   it is a near-black; in day it is a barely-there warm wash, because bone
+   does not need darkening - it needs a horizon. */
 .vignette {
   position: absolute;
   inset: 0;
@@ -122,9 +142,9 @@
   );
 }
 
-/* A faint noise layer. Large flat gradients band visibly on 8-bit
-   displays; a little grain breaks the bands up. Pure CSS - an SVG
-   turbulence filter would cost more than the problem is worth. */
+/* A faint noise layer. Large flat areas band visibly on 8-bit displays; a
+   little grain breaks the bands up. Pure CSS - an SVG turbulence filter
+   would cost more than the problem is worth. */
 .grain {
   position: absolute;
   inset: -50%;
@@ -142,41 +162,12 @@
   opacity: 0.6;
 }
 
-/* Distances are in percentages of the blob's own size, so the drift scales
-   with the viewport instead of being a fixed pixel wobble on a large
-   screen and a lurch on a small one. */
-@keyframes driftA {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(12%, 8%, 0) scale(1.12);
-  }
-}
-
-@keyframes driftB {
-  from {
-    transform: translate3d(0, 0, 0) scale(1.08);
-  }
-  to {
-    transform: translate3d(-14%, 12%, 0) scale(1);
-  }
-}
-
-@keyframes driftC {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(-10%, -10%, 0) scale(1.15);
-  }
-}
-
-/* The drift stops; the field stays, and so do the weave and the vignette.
-   Depth is not motion, and removing the colour as well would leave a flat
-   page rather than a calm one. */
+/* The charge settles; everything else stays exactly as it was. The rings,
+   the lattice and the vignette are structure rather than animation, and
+   removing them would leave a flat page rather than a calm one. */
 @media (prefers-reduced-motion: reduce) {
-  .blob {
+  .node {
     animation: none;
+    opacity: 0.3;
   }
 }

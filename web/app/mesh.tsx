@@ -1,36 +1,45 @@
 "use client";
 
 /**
- * The ambient field behind the console.
+ * The ground behind the console.
  *
- * Three soft radial gradients that drift very slowly against each other,
- * a triangular lattice etched over them, and a vignette closing the frame.
- * It is the difference between a page that sits on a flat colour and one
- * that sits in a space, and it costs almost nothing: no canvas, no
- * requestAnimationFrame, no library - a handful of divs with a CSS
- * keyframe on `transform` and `opacity` only, which the compositor handles
- * without touching layout or paint. The lattice and the vignette are
- * static gradients and cost nothing at all after first paint.
+ * There is no colour wash back here, and that is the design rather than a
+ * limitation. Every coloured thing in this layer is a one-pixel line or a
+ * two-pixel point; the field between them is obsidian and stays obsidian.
+ * Soft blurred gradients are what every dark theme reaches for, and they
+ * all end up looking like the same purple fog - so this reaches for the
+ * opposite: a reading spreading across a sand table.
  *
- * It is deliberately behind everything at low opacity. At the point where
- * you would describe it as "a background animation" it has gone too far -
- * the job is depth, not decoration, and every screen it sits behind has
- * text on it that someone is trying to read.
+ * Four static layers and one that breathes:
  *
- * Under prefers-reduced-motion the drift stops but the field stays: it is
- * depth, and depth is not motion. That is handled in mesh.module.css
- * rather than here, so it holds even if this component is rendered by
- * something that forgot to think about it.
+ *   horizon   the only large area with a value on it, and it is a neutral.
+ *   rings     concentric hairlines radiating from above the masthead.
+ *   weave     the triangular lattice, full-bleed.
+ *   nodes     nine points of charge, breathing out of phase with each
+ *             other over 11-19 seconds.
+ *   vignette  closes the frame so the light sits where the reading is.
+ *
+ * It costs almost nothing: no canvas, no requestAnimationFrame, no
+ * library, no blur filter. Four gradients and nine 3px dots animating
+ * `opacity`, which the compositor handles without touching layout or
+ * paint. Under prefers-reduced-motion the charge settles and everything
+ * else stays - structure is not motion, and removing it would leave a
+ * flat page rather than a calm one.
  */
 
 import s from "./mesh.module.css";
 
+/* Nine, placed toward the edges. Few enough that the eye finds them rather
+ * than being led around by them, and out of the middle because the middle
+ * is where the reading is. */
+const NODES = [s.n1, s.n2, s.n3, s.n4, s.n5, s.n6, s.n7, s.n8, s.n9];
+
 export function AmbientMesh({
   variant = "page",
 }: {
-  /** `page` is the calm default. `hero` is brighter and larger, for the
-   * rounds screen and the report's verdict block, where there is space for
-   * it and something worth framing. */
+  /** `page` is the calm default. `hero` turns the reading up a little, for
+   * the rounds screen, the report's verdict and the library header - where
+   * there is space for it and something worth framing. */
   variant?: "page" | "hero";
 }) {
   return (
@@ -38,12 +47,14 @@ export function AmbientMesh({
       className={`${s.mesh} ${variant === "hero" ? s.meshHero : ""}`}
       aria-hidden="true"
     >
-      <span className={`${s.blob} ${s.blobA}`} />
-      <span className={`${s.blob} ${s.blobB}`} />
-      <span className={`${s.blob} ${s.blobC}`} />
-      {/* Order matters: the lattice is etched over the light, and the
-          vignette closes the frame around both. */}
+      {/* Order matters: the lattice is etched over the rings, the charge
+          sits on the lattice, and the vignette closes over all of it. */}
+      <span className={s.horizon} />
+      <span className={s.rings} />
       <span className={s.weave} />
+      {NODES.map((n, i) => (
+        <span key={i} className={`${s.node} ${n}`} />
+      ))}
       <span className={s.vignette} />
       <span className={s.grain} />
     </div>

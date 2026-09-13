@@ -207,7 +207,7 @@
   --focus: var(--vibranium-300);
 
   /* -- depth ------------------------------------------------------------
-     Glass, glow, the mesh field and the weave. These are the layer that
+     Glass, glow, and the lattice behind everything. These are the layer
      makes the console read as built rather than drawn, and they are
      semantic tokens like everything else.
 
@@ -219,26 +219,44 @@
 
   --glow-accent: 0 0 0 1px rgba(192, 132, 252, 0.26),
                  0 10px 40px -10px rgba(168, 85, 247, 0.55);
+  /* The same idea at panel scale. A bloom that works under a button
+     becomes a coloured patch under something the size of the verdict
+     block, so a large surface gets a lit rim instead: the edge reads as
+     charged and the page behind it stays obsidian. */
+  --glow-rim: 0 0 0 1px rgba(192, 132, 252, 0.3),
+              0 0 34px -20px rgba(168, 85, 247, 0.5);
   --glow-gold: 0 0 0 1px rgba(232, 198, 126, 0.24),
                0 8px 30px -10px rgba(217, 164, 65, 0.35);
   --glow-ok: 0 0 30px -6px rgba(74, 222, 128, 0.42);
   --glow-bad: 0 0 30px -6px rgba(251, 113, 133, 0.4);
 
-  /* The ambient field. Two violets and a whisper of gold - without the
-     third stop the whole ground goes monochrome purple, which is the
-     failure mode of every dark theme that has ever been described as
-     "cyberpunk". */
-  --mesh-1: rgba(168, 85, 247, 0.17);
-  --mesh-2: rgba(109, 40, 217, 0.19);
-  --mesh-3: rgba(217, 164, 65, 0.09);
+  /* -- the ground -------------------------------------------------------
+     There is no colour wash back here. Every coloured thing in the
+     background is a one-pixel line or a two-pixel point; the field between
+     them is obsidian and stays obsidian. That is what makes it read as
+     machined rather than as a dark theme with a gradient thrown on it.
+
+     --horizon is the only large-area value and it is a neutral: the top of
+     the page sits a shade above the bottom, which is a horizon rather than
+     a patch. */
+  --horizon: rgba(26, 22, 38, 0.85);
   --mesh-opacity: 1;
 
-  /* The etched lattice over the ambient field, and how far into the page
-     it reaches before fading out. Texture, not pattern: at the point
+  /* Concentric rings radiating from a point above the masthead. One pixel
+     each, spaced by --ring-gap, fading out with distance. */
+  --ring: rgba(168, 85, 247, 0.21);
+  --ring-gap: 54px;
+
+  /* The etched triangular lattice. Texture, not pattern: at the point
      where you can count the triangles it is too strong. */
-  --weave: rgba(232, 198, 126, 0.085);
+  --weave: rgba(232, 198, 126, 0.095);
   --weave-size: 46px;
-  --vignette: rgba(2, 1, 4, 0.78);
+
+  /* Charged points sitting on the lattice. */
+  --node: rgba(216, 180, 254, 0.85);
+  --node-glow: rgba(168, 85, 247, 0.55);
+
+  --vignette: rgba(2, 1, 4, 0.82);
 
   /* The rail a timeline or stepper is drawn on. */
   --rail: var(--obsidian-800);
@@ -291,6 +309,8 @@
 
     --glow-accent: 0 0 0 1px rgba(109, 40, 217, 0.2),
                    0 10px 34px -10px rgba(109, 40, 217, 0.38);
+    --glow-rim: 0 0 0 1px rgba(109, 40, 217, 0.24),
+                0 0 28px -20px rgba(109, 40, 217, 0.35);
     --glow-gold: 0 0 0 1px rgba(138, 100, 19, 0.2),
                  0 8px 26px -10px rgba(138, 100, 19, 0.28);
     --glow-ok: 0 0 26px -6px rgba(21, 128, 61, 0.4);
@@ -299,13 +319,18 @@
     /* Far weaker than obsidian's. A coloured wash under long-form reading
        is the fastest way to make a report tiring, and the report is the
        part people actually read. */
-    --mesh-1: rgba(109, 40, 217, 0.1);
-    --mesh-2: rgba(168, 85, 247, 0.08);
-    --mesh-3: rgba(217, 164, 65, 0.12);
+    --horizon: rgba(202, 191, 174, 0.5);
     --mesh-opacity: 1;
 
-    --weave: rgba(138, 100, 19, 0.055);
-    --vignette: rgba(138, 100, 19, 0.05);
+    --ring: rgba(109, 40, 217, 0.09);
+    --ring-gap: 54px;
+
+    --weave: rgba(138, 100, 19, 0.07);
+
+    --node: rgba(109, 40, 217, 0.5);
+    --node-glow: rgba(109, 40, 217, 0.22);
+
+    --vignette: rgba(138, 100, 19, 0.06);
 
     --rail: var(--bone-300);
 
@@ -352,18 +377,25 @@
 
   --glow-accent: 0 0 0 1px rgba(109, 40, 217, 0.2),
                  0 10px 34px -10px rgba(109, 40, 217, 0.38);
+  --glow-rim: 0 0 0 1px rgba(109, 40, 217, 0.24),
+              0 0 28px -20px rgba(109, 40, 217, 0.35);
   --glow-gold: 0 0 0 1px rgba(138, 100, 19, 0.2),
                0 8px 26px -10px rgba(138, 100, 19, 0.28);
   --glow-ok: 0 0 26px -6px rgba(21, 128, 61, 0.4);
   --glow-bad: 0 0 26px -6px rgba(190, 18, 60, 0.35);
 
-  --mesh-1: rgba(109, 40, 217, 0.1);
-  --mesh-2: rgba(168, 85, 247, 0.08);
-  --mesh-3: rgba(217, 164, 65, 0.12);
+  --horizon: rgba(202, 191, 174, 0.5);
   --mesh-opacity: 1;
 
-  --weave: rgba(138, 100, 19, 0.055);
-  --vignette: rgba(138, 100, 19, 0.05);
+  --ring: rgba(109, 40, 217, 0.09);
+  --ring-gap: 54px;
+
+  --weave: rgba(138, 100, 19, 0.07);
+
+  --node: rgba(109, 40, 217, 0.5);
+  --node-glow: rgba(109, 40, 217, 0.22);
+
+  --vignette: rgba(138, 100, 19, 0.06);
 
   --rail: var(--bone-300);
 
