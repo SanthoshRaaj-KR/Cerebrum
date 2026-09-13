@@ -1,11 +1,18 @@
 """Dictation for the answer box: mic in -> VAD -> Deepgram STT -> back to
 the browser as transcript messages over the WebRTC data channel.
 
-This used to be a full spoken interview - the model talked back through
-TTS. Cerebrum's design made the interview typed and graded, so the
-microphone's job shrank to one thing: let someone speak an answer instead
-of typing it. No LLM and no TTS in this path; the transcript lands in the
-textarea and the normal typed flow takes over from there.
+This used to be a full spoken interview, with the model talking back over
+the same connection. Cerebrum's design made the interview typed and
+graded, so the microphone's job shrank to one thing: let someone speak an
+answer instead of typing it. No LLM and no audio going back down this
+path; the transcript lands in the textarea and the normal typed flow takes
+over from there.
+
+The interviewer does read its question aloud again, but deliberately not
+here. That is a plain request to /api/speak returning a file (see
+speech.py) rather than a second stream negotiated on this transport, so a
+dead mic and a silent interviewer stay independent failures - and the
+dictation path keeps having exactly one job.
 
 Pipecat's RTVIProcessor (attached to every PipelineWorker by default)
 already emits `user-transcription` messages over the data channel, which

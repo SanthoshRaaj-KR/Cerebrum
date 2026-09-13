@@ -15,8 +15,10 @@ export type MicHandlers = {
 
 // Pipecat's RTVI message shapes (pipecat.processors.frameworks.rtvi.models),
 // sent as JSON over the data channel we open below. The backend pipeline is
-// dictation only - transport -> VAD -> Deepgram STT, no LLM and no TTS - so
-// the only message that matters here is the user's own transcription.
+// dictation only - transport -> VAD -> Deepgram STT, no LLM and no audio
+// coming back down this connection - so the only message that matters here
+// is the user's own transcription. The interviewer's voice is a separate
+// thing entirely: a plain request to /api/speak, see lib/speech.ts.
 type RtviMessage = {
   label: string;
   type: string;
