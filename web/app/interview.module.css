@@ -100,6 +100,9 @@
    colour subtle keeps it out of the way of the only thing that matters
    here. */
 .who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   font-family: var(--font-mono), monospace;
   font-size: var(--text-xs);
   text-transform: uppercase;
@@ -107,9 +110,69 @@
   color: var(--text-subtle);
 }
 
+/* The voice switch in the bar. Deliberately the same shape and weight as
+   the theme toggle sitting next to it - they are two switches for the same
+   kind of preference, and making one of them louder would suggest muting
+   the interviewer is a bigger decision than it is. */
+.voiceToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--surface);
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.voiceToggle:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+/* On, and currently talking. The accent is the only signal, and it says
+   "sound is coming out of this", never anything about the answer - the
+   same rule every other pixel on this screen follows. */
+.voiceToggle[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent-wash);
+}
+
+/* Hear it again. Sits on the label line rather than under the question,
+   because anything below the question competes with the answer box for
+   the same glance. Quiet until you go looking for it. */
+.replay {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-mono), monospace;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  opacity: 0.7;
+  transition:
+    color var(--dur) var(--ease),
+    opacity var(--dur) var(--ease);
+}
+
+.replay:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* The one thing on this screen that matters. Line-height goes to
+   `normal` rather than `snug`: a question is read once, under mild
+   pressure, by someone already composing an answer in their head, and
+   tight leading on two or three lines of that is work nobody needed. */
 .question {
   font-size: var(--text-xl);
-  line-height: var(--leading-snug);
+  line-height: var(--leading-normal);
   letter-spacing: -0.01em;
   max-width: var(--measure);
 }

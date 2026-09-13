@@ -24,12 +24,20 @@
  * finishes instantly on a click, and under reduced motion it never runs.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { SessionState } from "@/lib/api";
+import * as speech from "@/lib/speech";
 import { MicStatus } from "@/lib/webrtc";
 import { Constellation } from "./constellation";
-import { IconArrowRight, IconMic, ModeIcon } from "./icons";
+import {
+  IconArrowRight,
+  IconMic,
+  IconReplay,
+  IconSpeaker,
+  IconSpeakerOff,
+  ModeIcon,
+} from "./icons";
 import { AmbientMesh } from "./mesh";
 import { rise, stagger } from "./motion";
 import { Button, Meter, ThemeToggle, ui } from "./ui";
@@ -44,18 +52,24 @@ import s from "./interview.module.css";
  * become a wait - about 70 characters a second, comfortably quicker than
  * anyone reads - and the whole thing can be skipped by clicking it.
  */
-function Typewriter({ text }: { text: string }) {
+function Typewriter({ text, instant }: { text: string; instant?: boolean }) {
   const reduced = useReducedMotion();
   const [typed, setTyped] = useState(0);
 
   // Derived rather than stored, so reduced motion needs no state write and
   // therefore no cascading render: the full question is simply what
   // renders. The counter only ever advances from the interval below.
-  const shown = reduced ? text.length : typed;
+  //
+  // `instant` is set when the question is being read aloud. Two things
+  // pacing the same sentence at two different speeds is worse than either
+  // alone - the voice becomes the pace, and the text is simply there to
+  // read along with.
+  const still = reduced || !!instant;
+  const shown = still ? text.length : typed;
   const done = shown >= text.length;
 
   useEffect(() => {
-    if (reduced) return;
+    if (still) return;
     let i = 0;
     const id = setInterval(() => {
       i += 2;                       // two characters a tick: smooth, and half the timers
@@ -63,7 +77,7 @@ function Typewriter({ text }: { text: string }) {
       if (i >= text.length) clearInterval(id);
     }, 14);
     return () => clearInterval(id);
-  }, [text, reduced]);
+  }, [text, still]);
 
   return (
     <p
@@ -83,6 +97,50 @@ function Typewriter({ text }: { text: string }) {
   );
 }
 
+/**
+ * Whether questions are read aloud, remembered between sessions.
+ *
+ * Stored rather than defaulted every time because this is a preference
+ * about a room, not about a screen: someone practising on a train wants
+ * it off and will want it off tomorrow too. Reads are wrapped because
+ * localStorage throws outright in some contexts rather than returning
+ * null, and a muted interview is not worth a blank page.
+ *
+ * Default ON. The point of the feature is to hear the question, and a
+ * feature that has to be discovered before it does anything is a feature
+ * most people never meet.
+ */
+const VOICE_KEY = "cerebrum-voice";
+
+function storedVoice(): boolean {
+  try {
+    return localStorage.getItem(VOICE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+function SpeakToggle({
+  on,
+  onChange,
+}: {
+  on: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={s.voiceToggle}
+      onClick={() => onChange(!on)}
+      aria-pressed={on}
+      aria-label={on ? "Turn off spoken questions" : "Read questions aloud"}
+      title={on ? "Questions are read aloud" : "Questions are silent"}
+    >
+      {on ? <IconSpeaker size={18} /> : <IconSpeakerOff size={18} />}
+    </button>
+  );
+}
+
 export function InterviewScreen({
   session,
   answer,
@@ -97,6 +155,7 @@ export function InterviewScreen({
   onSkip,
   onEnd,
   pending,
+  serverVoice,
 }: {
   session: SessionState;
   answer: string;
@@ -111,6 +170,10 @@ export function InterviewScreen({
   onSkip: () => void;
   onEnd: () => void;
   pending: { text: string; skipped: boolean } | null;
+  /** Whether the bridge has a speech key. False still speaks - the
+   * browser's own voice takes over - so this only decides whether the
+   * good one is worth a round trip. */
+  serverVoice: boolean;
 }) {
   const { pacing } = session;
   const turns = session.turns;
@@ -118,6 +181,69 @@ export function InterviewScreen({
   const awaiting = !!current && current.answer === null && !busy;
   const micLive = micStatus === "listening" || micStatus === "connecting";
   const endRef = useRef<HTMLDivElement | null>(null);
+
+  // -- the voice ----------------------------------------------------------
+  const [voiceOn, setVoiceOn] = useState(true);
+  const [speaking, setSpeaking] = useState(false);
+  // The question the voice has already read. Without it, every unrelated
+  // re-render of this screen - a keystroke in the answer box - would start
+  // the question again from the top.
+  const spoken = useRef<string | null>(null);
+  const liveQuestion = awaiting ? (current?.question ?? null) : null;
+
+  // Read the stored preference once, on the client. It cannot be the
+  // initial state because the server renders this too and has no access to
+  // localStorage; doing it here costs one extra render on mount and keeps
+  // the markup identical on both sides.
+  useEffect(() => {
+    setVoiceOn(storedVoice());
+  }, []);
+
+  const say = useCallback(
+    (text: string) => {
+      setSpeaking(true);
+      void speech.speak(text, {
+        serverVoice,
+        onEnd: () => setSpeaking(false),
+      });
+    },
+    [serverVoice],
+  );
+
+  // Speak each question once, as it arrives.
+  useEffect(() => {
+    if (!voiceOn || !liveQuestion) return;
+    if (spoken.current === liveQuestion) return;
+    spoken.current = liveQuestion;
+    say(liveQuestion);
+  }, [voiceOn, liveQuestion, say]);
+
+  // Muting stops mid-sentence. A mute button that lets the current
+  // sentence finish is a button that does not work.
+  useEffect(() => {
+    if (!voiceOn) {
+      speech.stop();
+      setSpeaking(false);
+    }
+  }, [voiceOn]);
+
+  // Leaving the interview takes the voice and the cached audio with it.
+  useEffect(() => () => speech.reset(), []);
+
+  function flipVoice(next: boolean) {
+    setVoiceOn(next);
+    try {
+      localStorage.setItem(VOICE_KEY, next ? "on" : "off");
+    } catch {
+      // Not being able to remember the choice is no reason to refuse it.
+    }
+    // Turning it on mid-question reads the one on screen now, rather than
+    // waiting silently for the next.
+    if (next && liveQuestion) {
+      spoken.current = liveQuestion;
+      say(liveQuestion);
+    }
+  }
 
   // Keep the live question in view as the conversation grows. Under
   // reduced-motion the global rule turns this into a jump, which is the
@@ -158,8 +284,16 @@ export function InterviewScreen({
           </div>
 
           <div className={s.barActions}>
+            <SpeakToggle on={voiceOn} onChange={flipVoice} />
             <ThemeToggle />
-            <Button variant="ghost" onClick={onEnd} disabled={busy}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                speech.stop();
+                onEnd();
+              }}
+              disabled={busy}
+            >
               End
             </Button>
           </div>
@@ -234,9 +368,23 @@ export function InterviewScreen({
               // recedes into history the card travels rather than cutting.
               layout="position"
             >
-              <p className={s.who}>Interviewer</p>
+              <p className={s.who}>
+                Interviewer
+                {live && voiceOn && (
+                  <button
+                    type="button"
+                    className={s.replay}
+                    onClick={() => say(t.question)}
+                    aria-label="Hear the question again"
+                    title="Hear it again"
+                  >
+                    <IconReplay size={13} />
+                    {speaking ? "Speaking" : "Again"}
+                  </button>
+                )}
+              </p>
               {live ? (
-                <Typewriter text={t.question} />
+                <Typewriter text={t.question} instant={voiceOn} />
               ) : (
                 <p className={s.question}>{t.question}</p>
               )}
@@ -309,12 +457,22 @@ export function InterviewScreen({
                 </Button>
                 <span className={s.hintKeys}>Ctrl + Enter to send</span>
                 <span className={s.spacer} />
-                <Button variant="ghost" onClick={onSkip} disabled={busy}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    speech.stop();
+                    onSkip();
+                  }}
+                  disabled={busy}
+                >
                   Skip
                 </Button>
                 <Button
                   variant="primary"
-                  onClick={onSubmit}
+                  onClick={() => {
+                    speech.stop();
+                    onSubmit();
+                  }}
                   disabled={busy || !answer.trim()}
                 >
                   Send

@@ -418,6 +418,7 @@ export default function Home() {
         onSkip={() => send(true)}
         onEnd={finish}
         pending={pending}
+        serverVoice={!!system?.speechEnabled}
       />
     );
   }

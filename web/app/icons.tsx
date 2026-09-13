@@ -171,6 +171,31 @@ export const IconMic = (p: IconProps) => (
   </Svg>
 );
 
+/* Speaker on and speaker muted. Same cone in both so the two read as one
+   control changing state rather than two different buttons - the waves
+   are simply replaced by the cross. */
+export const IconSpeaker = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M11 5 6.5 9H3v6h3.5L11 19z" />
+    <path d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10" />
+  </Svg>
+);
+
+export const IconSpeakerOff = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M11 5 6.5 9H3v6h3.5L11 19z" />
+    <path d="m16 10 4 4M20 10l-4 4" />
+  </Svg>
+);
+
+/** A replay arrow, for hearing a question a second time. */
+export const IconReplay = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 12a8 8 0 1 0 2.5-5.8" />
+    <path d="M4 4v4h4" />
+  </Svg>
+);
+
 export const IconSun = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="4" />
