@@ -107,9 +107,26 @@ storage:
   collection: interviews
 
 voice:
-  # Dictation only. The candidate may speak their answer instead of typing
-  # it; the transcript lands in the answer box and the normal typed flow
-  # takes over. The interviewer never speaks back - there is no TTS here
-  # and pipeline.py negotiates no outbound audio at all.
+  # Speech goes both ways now, but not symmetrically, and the asymmetry is
+  # the design.
+  #
+  # In: the candidate may speak their answer instead of typing it. The
+  # transcript lands in the answer box and the normal typed flow takes
+  # over from there - the mic is an input method, not a conversation.
+  #
+  # Out: the interviewer reads its question aloud. That is the ONLY thing
+  # it will ever say. It never reads a judgement, a score or a hint,
+  # because none of those reach this screen in the first place - the
+  # endpoint speaks the question that is already on the candidate's
+  # screen and refuses anything else.
   stt:
     provider: deepgram
+  tts:
+    enabled: true
+    provider: deepgram
+    # Aura runs on the Deepgram key you already have for dictation, so
+    # switching this on costs no new setup. If the request fails for any
+    # reason the browser falls back to its own built-in voice, which is
+    # worse but always there - a silent interview is the one outcome
+    # worth avoiding.
+    model: aura-2-thalia-en

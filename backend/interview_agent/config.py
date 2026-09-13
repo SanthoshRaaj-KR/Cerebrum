@@ -196,10 +196,36 @@ class Settings:
     def storage_collection(self) -> str:
         return str(self.storage.get("collection", "interviews")).strip() or "interviews"
 
-    # There is deliberately no TTS setting here. The interviewer never
-    # speaks - pipeline.py is dictation-only and negotiates no outbound
-    # audio at all - so a voice.tts section would be configuring a
-    # capability the system does not have.
+    # -- speech ---------------------------------------------------------------
+
+    @property
+    def voice(self) -> dict[str, Any]:
+        return self._section("voice")
+
+    @property
+    def tts(self) -> dict[str, Any]:
+        section = self.voice.get("tts")
+        return section if isinstance(section, dict) else {}
+
+    @property
+    def tts_enabled(self) -> bool:
+        """Whether the bridge will read a question aloud when asked to.
+
+        This used to be a hard no, and the reason was real: the interview
+        is typed and graded, so a voice bought nothing and pipeline.py
+        negotiates no outbound audio at all. What changed is what the
+        voice is for - not conversation, but reading the question you can
+        already see. That is a rehearsal aid, and it does not touch the
+        answer path or the judging path.
+
+        Still one-directional and still text-first: the model speaks only
+        words already on the candidate's screen.
+        """
+        return bool(self.tts.get("enabled", True)) and bool(self.deepgram_api_key)
+
+    @property
+    def tts_model(self) -> str:
+        return str(self.tts.get("model", "aura-2-thalia-en")).strip() or "aura-2-thalia-en"
 
 
 def load_settings() -> Settings:
