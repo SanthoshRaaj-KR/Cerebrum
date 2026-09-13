@@ -462,3 +462,58 @@ interviewer label on the live interview screen matches all of it except
 the colour. Gold is how this theme says *look here*, and that label sits
 directly above the question someone is being asked — the one place in the
 product where nothing may compete for attention.
+
+---
+
+## Revision: the voice, and reading comfort
+
+### The interviewer speaks now
+
+It did not before, and the old reasoning was sound for what the product
+was: the interview is typed and graded, so a voice bought nothing.
+
+What changed is what the voice is *for*. It reads out the question that is
+already on screen — a rehearsal aid, not a conversation. Speech is
+asymmetric on purpose:
+
+| | What it is |
+|---|---|
+| **In** | An input method. You speak, Deepgram transcribes, the text lands in the answer box, and the normal typed flow takes over |
+| **Out** | One sentence — the question you can already see. It never reads a judgement, a score or a hint, because none of those reach this screen at all |
+
+`/api/speak` checks the text against the session's own questions before a
+single byte reaches Deepgram. *"Say this out loud"* is precisely the shape
+of request that could otherwise read back a private per-turn note or the
+crib sheet — both kept out of the browser and the database for the same
+reason — so the endpoint speaks words already on the candidate's screen or
+it speaks nothing.
+
+Two voices, and the fallback is not decoration. Aura sounds like a person
+but it is a network round trip standing in front of a question somebody is
+waiting to hear, and every one of its failure modes is ordinary. Anything
+that goes wrong falls through to `speechSynthesis` rather than surfacing an
+error mid-question.
+
+**The typewriter yields to the voice.** Two things pacing the same sentence
+at two different speeds is worse than either alone, so with speech on the
+question simply appears and the voice carries the pace.
+
+**The voice switch is the same weight as the theme toggle.** Muting the
+interviewer is not a bigger decision than switching to day, and a louder
+control would imply it was.
+
+### Ambient layers are tuned for the twentieth minute, not the first
+
+The lattice, rings and charge points were all set by looking at a
+screenshot for a second. The interview screen is looked at while someone
+composes an answer under pressure, and at those values the eye kept
+re-finding the pattern behind the words.
+
+All three roughly halved. The test for an ambient layer is not "does this
+look good" — it is **noticed once, then not again**.
+
+The type moved with it: muted text up a step on the ramp (8.9:1 → 12.9:1
+on obsidian), subtle text 5.2:1 → 6.7:1, and the live question from snug
+leading to normal. A question is read once, by someone already
+half-composing a reply; tight leading on three lines of that is work
+nobody needed.

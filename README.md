@@ -197,12 +197,11 @@ browser can't route to. Run on the host if you want to dictate answers.
 | The interviewer | OpenAI (default) | Your existing credits — [platform.openai.com](https://platform.openai.com/api-keys) |
 | The interviewer (faster alternative) | Cerebras | Set `interviewer.provider: cerebras` — [cloud.cerebras.ai](https://cloud.cerebras.ai) |
 | Role research | Tavily | Free tier — [tavily.com](https://tavily.com) |
-| Speech-to-text, so you can speak an answer | Deepgram | Free tier — [console.deepgram.com](https://console.deepgram.com) |
+| Speech, both directions | Deepgram | Free tier — [console.deepgram.com](https://console.deepgram.com) |
 | Keeping your interviews (optional) | MongoDB | Free tier on Atlas, or a local `mongod` — it is only a URI |
 
-**Three keys, not five.** The interview is typed — the interviewer never
-speaks, so there is no text-to-speech to pay for — and the LLM needs only
-whichever provider you select. Every swap is one line in `config.yaml`; set
+**Three keys, not five.** One Deepgram key covers both directions of
+speech, and the LLM needs only whichever provider you select. Every swap is one line in `config.yaml`; set
 `research.enabled: false` to skip Tavily entirely and fall back to the
 model's own knowledge of the role.
 
@@ -212,8 +211,10 @@ Keys go in `.env` — see `.env.example`:
   `OPENAI_API_KEY` (the default) or `CEREBRAS_API_KEY`. `doctor.py` checks
   it with a real 1-token completion, not a format check — listing models
   succeeds on an account with no credit left, running an interview doesn't.
-- **`DEEPGRAM_API_KEY`** — dictation, so you can speak an answer instead of
-  typing it.
+- **`DEEPGRAM_API_KEY`** — speech, both ways: dictation so you can speak
+  an answer instead of typing it, and Aura so the question is read aloud.
+  `doctor.py` checks the two separately, because they are separate
+  entitlements and both fail as silence.
 - **`TAVILY_API_KEY`** — the role research. Required unless
   `research.enabled` is `false`.
 - **`MONGODB_URI`** — optional. Where a stored interview goes. Leave it
@@ -396,6 +397,21 @@ console is gold; the interviewer label on the live screen is not. Gold is
 how this theme says *look here*, and that label sits directly above the
 question you are being asked.
 
+**The question is also read aloud**, by the speaker button in the bar —
+on by default, remembered, and it stops mid-sentence when you mute it.
+When the voice is on the question simply appears rather than typing
+itself in: two things pacing the same sentence at two different speeds is
+worse than either alone, so the voice carries the pace and the text is
+there to read along with. **Again** replays it. The good voice is
+Deepgram Aura on the key dictation already uses; if that is missing or
+unreachable your browser's own voice takes over, which is worse but
+always there — a silent interview is the outcome actually worth avoiding.
+
+The ambient layer is tuned for reading rather than for a first
+impression. Texture that looks good in a screenshot is not the same as
+texture you can read through for twenty minutes, and everything back
+there is set to be noticed once and then not again.
+
 Motion is defined once, in `web/app/motion.ts`, and honoured once —
 `<MotionConfig reducedMotion="user">` at the root, so
 `prefers-reduced-motion` turns every transform into an opacity change and
@@ -482,6 +498,10 @@ the agent path were found and fixed this way.
   person is waiting for the next question. That account currently returns
   `402 Payment required` on completions, which is why OpenAI is the default.
 
-A fully spoken interview isn't built and isn't planned: `pipeline.py`'s mic
-path turns speech into the answer box's text and negotiates no outbound
-audio at all. The interviewer is a reader and a writer, not a voice.
+A fully spoken interview — one you could do with the screen off — isn't
+built. Speech goes both ways now but not symmetrically, and the asymmetry
+is deliberate rather than unfinished. Out, the interviewer reads its
+question aloud and that is the only thing it will ever say. In,
+`pipeline.py`'s mic path turns what you say into text in the answer box
+and the normal typed flow takes over. The voice is a rehearsal aid laid
+over a written interview, not a conversation.
