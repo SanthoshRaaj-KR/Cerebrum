@@ -65,6 +65,63 @@
   top: -6vmax;
 }
 
+/* -- the weave ------------------------------------------------------------
+   A triangular lattice etched over the field: three sets of hairlines at
+   0, 60 and 120 degrees, which is the whole trick - three families of
+   parallel lines at sixty degrees to each other IS a triangular grid, and
+   it costs three gradients rather than a tiled image.
+
+   It is masked to be absent behind the middle of the page and present
+   toward the frame. That is the difference between texture and wallpaper:
+   the etching surrounds what you are reading instead of running underneath
+   it, and no line ever crosses a paragraph.
+
+   Deliberately not animated. The blobs move under it; the lattice is
+   architecture, and architecture that drifts is a distraction. */
+.weave {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      60deg,
+      var(--weave) 0 1px,
+      transparent 1px var(--weave-size)
+    ),
+    repeating-linear-gradient(
+      -60deg,
+      var(--weave) 0 1px,
+      transparent 1px var(--weave-size)
+    ),
+    repeating-linear-gradient(
+      0deg,
+      var(--weave) 0 1px,
+      transparent 1px calc(var(--weave-size) * 0.866)
+    );
+  -webkit-mask-image: radial-gradient(
+    ellipse 68% 56% at 50% 42%,
+    transparent 30%,
+    #000 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 68% 56% at 50% 42%,
+    transparent 30%,
+    #000 100%
+  );
+}
+
+/* Draws the edges of the frame down and lets the middle carry the light.
+   On obsidian it is a near-black; in day it is a barely-there warm wash,
+   because bone does not need darkening - it needs a horizon. */
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 78% 70% at 50% 34%,
+    transparent 42%,
+    var(--vignette) 100%
+  );
+}
+
 /* A faint noise layer. Large flat gradients band visibly on 8-bit
    displays; a little grain breaks the bands up. Pure CSS - an SVG
    turbulence filter would cost more than the problem is worth. */
@@ -115,8 +172,9 @@
   }
 }
 
-/* The drift stops; the field stays. Depth is not motion, and removing the
-   colour as well would leave a flat page rather than a calm one. */
+/* The drift stops; the field stays, and so do the weave and the vignette.
+   Depth is not motion, and removing the colour as well would leave a flat
+   page rather than a calm one. */
 @media (prefers-reduced-motion: reduce) {
   .blob {
     animation: none;

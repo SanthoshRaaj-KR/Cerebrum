@@ -3,12 +3,14 @@
 /**
  * The ambient field behind the console.
  *
- * Three soft radial gradients that drift very slowly against each other.
+ * Three soft radial gradients that drift very slowly against each other,
+ * a triangular lattice etched over them, and a vignette closing the frame.
  * It is the difference between a page that sits on a flat colour and one
  * that sits in a space, and it costs almost nothing: no canvas, no
- * requestAnimationFrame, no library - three divs with a CSS keyframe on
- * `transform` and `opacity` only, which the compositor handles without
- * touching layout or paint.
+ * requestAnimationFrame, no library - a handful of divs with a CSS
+ * keyframe on `transform` and `opacity` only, which the compositor handles
+ * without touching layout or paint. The lattice and the vignette are
+ * static gradients and cost nothing at all after first paint.
  *
  * It is deliberately behind everything at low opacity. At the point where
  * you would describe it as "a background animation" it has gone too far -
@@ -39,6 +41,10 @@ export function AmbientMesh({
       <span className={`${s.blob} ${s.blobA}`} />
       <span className={`${s.blob} ${s.blobB}`} />
       <span className={`${s.blob} ${s.blobC}`} />
+      {/* Order matters: the lattice is etched over the light, and the
+          vignette closes the frame around both. */}
+      <span className={s.weave} />
+      <span className={s.vignette} />
       <span className={s.grain} />
     </div>
   );
