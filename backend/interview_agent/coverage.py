@@ -48,7 +48,11 @@ _LEVEL_BRIEF = {
         "They have handled this at two levels already. Take it to the top of "
         "what is fair for a fresher: what breaks at ten times the load, "
         "where the abstraction leaks, which trade-off they would take and "
-        "why. Genuinely hard, still answerable by a good new graduate."
+        "why. Genuinely hard, still answerable by a good new graduate. "
+        "This is the TOP of the ladder, not a licence to keep climbing. "
+        "There is no rung above it. If they clear this one too, they have "
+        "finished this ground - go and find some they have not shown you "
+        "yet, rather than inventing a harder version of the same thing."
     ),
 }
 
