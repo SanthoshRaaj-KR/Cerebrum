@@ -333,8 +333,11 @@ p.eyebrow::after {
   border-color: var(--border);
 }
 
+/* Panel scale, so a rim rather than a bloom - see --glow-rim. A halo the
+   size of the verdict block is a coloured patch, which is the one thing
+   the ground behind it is built to avoid. */
 .glassGlow {
-  box-shadow: var(--glow-accent);
+  box-shadow: var(--glow-rim);
 }
 
 /* -- corner etching -------------------------------------------------------
